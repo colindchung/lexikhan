@@ -12,6 +12,12 @@ EventBridge Scheduler schedule backed by the same Lambda function.
   encrypted SQS dead-letter queue.
 - CloudWatch Logs are retained for one month.
 - CloudWatch alarms detect worker errors and messages in the dead-letter queue.
+- DynamoDB stores delivery history by `userId` and `itemId` using on-demand
+  billing and AWS-managed encryption.
+
+Production enables DynamoDB deletion protection, point-in-time recovery, and a
+retain-on-delete policy. Development leaves those protections off so ephemeral
+stacks can be removed cleanly.
 
 The handler contains only trigger-specific adaptation. Shared application logic
 lives in `src/handler/service.py`; split the API and scheduler into separate

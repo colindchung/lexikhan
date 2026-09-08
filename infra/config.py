@@ -7,6 +7,7 @@ class StageConfig:
     schedule_expression: str
     lambda_memory_mb: int = 512
     lambda_timeout_seconds: int = 30
+    protect_history: bool = False
 
 
 # Non-secret, environment-specific configuration belongs here so a given commit
@@ -19,5 +20,6 @@ STAGE_CONFIG: dict[str, StageConfig] = {
     "prod": StageConfig(
         region="us-west-2",
         schedule_expression="rate(15 minutes)",
+        protect_history=True,
     ),
 }

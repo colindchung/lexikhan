@@ -16,6 +16,9 @@ from aws_cdk import (
     aws_cloudwatch as cloudwatch,
 )
 from aws_cdk import (
+    aws_dynamodb as dynamodb,
+)
+from aws_cdk import (
     aws_iam as iam,
 )
 from aws_cdk import (
@@ -60,6 +63,32 @@ class ApplicationStack(Stack):
             ),
         )
 
+        history_table = dynamodb.Table(
+            self,
+            "HistoryTable",
+            partition_key=dynamodb.Attribute(
+                name="userId",
+                type=dynamodb.AttributeType.STRING,
+            ),
+            sort_key=dynamodb.Attribute(
+                name="itemId",
+                type=dynamodb.AttributeType.STRING,
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            encryption=dynamodb.TableEncryption.AWS_MANAGED,
+            deletion_protection=config.protect_history,
+            point_in_time_recovery_specification=(
+                dynamodb.PointInTimeRecoverySpecification(
+                    point_in_time_recovery_enabled=config.protect_history,
+                )
+            ),
+            removal_policy=(
+                RemovalPolicy.RETAIN
+                if config.protect_history
+                else RemovalPolicy.DESTROY
+            ),
+        )
+
         worker = lambda_.Function(
             self,
             "Worker",
@@ -72,8 +101,12 @@ class ApplicationStack(Stack):
             memory_size=config.lambda_memory_mb,
             tracing=lambda_.Tracing.ACTIVE,
             log_group=worker_logs,
-            environment={"STAGE": stage_name},
+            environment={
+                "STAGE": stage_name,
+                "HISTORY_TABLE_NAME": history_table.table_name,
+            },
         )
+        history_table.grant_read_write_data(worker)
 
         api = apigwv2.HttpApi(
             self,
@@ -172,5 +205,6 @@ class ApplicationStack(Stack):
         )
 
         CfnOutput(self, "ApiUrl", value=api.api_endpoint)
+        CfnOutput(self, "HistoryTableName", value=history_table.table_name)
         CfnOutput(self, "WorkerFunctionName", value=worker.function_name)
         CfnOutput(self, "ScheduleDeadLetterQueueUrl", value=schedule_dlq.queue_url)
