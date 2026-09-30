@@ -50,22 +50,24 @@ Stage configuration is committed in `infra/config.py`. The default stage is
 Bootstrap each target account and region once:
 
 ```bash
-cdk bootstrap aws://ACCOUNT_ID/us-west-2 --profile dev
-cdk bootstrap aws://ACCOUNT_ID/us-west-2 --profile prod
+cdk bootstrap \
+  aws://ACCOUNT_ID/us-east-2 \
+  --profile personal \
+  --termination-protection
 ```
 
 Review and deploy development:
 
 ```bash
-cdk diff -c stage=dev --profile dev
-cdk deploy -c stage=dev --profile dev
+cdk diff -c stage=dev --profile personal
+cdk deploy -c stage=dev --profile personal
 ```
 
 Review and deploy production:
 
 ```bash
-cdk diff -c stage=prod --profile prod
-cdk deploy -c stage=prod --profile prod --require-approval broadening
+cdk diff -c stage=prod --profile personal
+cdk deploy -c stage=prod --profile personal --require-approval broadening
 ```
 
 For CI, pin the expected account and region so synthesis cannot accidentally
@@ -75,28 +77,43 @@ target the credentials for another account:
 cdk deploy \
   -c stage=prod \
   -c account=ACCOUNT_ID \
-  -c region=us-west-2 \
+  -c region=us-east-2 \
   --require-approval never
 ```
 
-Use a short-lived CI role (for example, GitHub Actions OIDC) rather than stored
-AWS access keys. Put secret values in AWS Secrets Manager or Systems Manager
+Put application secret values in AWS Secrets Manager or Systems Manager
 Parameter Store, not in `infra/config.py` or Lambda environment configuration.
 
 ### GitHub Actions
 
-The repository includes pull-request checks and a deployment workflow. A push
-to `main` deploys `dev`; `prod` is deployed manually with the **Deploy**
-workflow. Create GitHub environments named `dev` and `prod`, then configure
-each with:
+The repository includes pull-request checks and a deployment workflow. Every
+push to `main`, including a merged pull request, deploys all stacks in the
+`prod` CDK stage. The workflow can also be run manually from the Actions page.
 
-- Environment secret `AWS_DEPLOY_ROLE_ARN`: IAM role trusted for GitHub OIDC.
-- Environment variable `AWS_ACCOUNT_ID`: expected 12-digit AWS account ID.
-- Environment variable `AWS_REGION`: deployment region, such as `us-west-2`.
+In **Settings → Environments**, create a GitHub environment named `personal`.
+Configure these environment secrets:
 
-Protect the `prod` GitHub environment with required reviewers. The workflow
-uses `allowed-account-ids` as an additional guard against deploying with
-credentials for the wrong account.
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+
+Configure these environment variables:
+
+- `AWS_ACCOUNT_ID`: expected 12-digit personal AWS account ID
+- `AWS_REGION`: deployment region, set to `us-east-2`
+
+The keys must belong to an IAM principal in the personal account, never the
+root user. The workflow validates the account ID before deploying, serializes
+deployments, runs lint and tests again, and deploys every stack with
+`cdk deploy --all`.
+
+In **Settings → Rules**, add a branch ruleset for `main` that requires pull
+requests and requires the `test` job from the **CI** workflow to pass. Do not
+add a required reviewer to the `personal` environment if deployment should
+begin immediately after a merge.
+
+Static access keys are supported, but GitHub OIDC with a short-lived AWS role
+is the preferred long-term setup. Rotate or revoke these keys if they are ever
+exposed, and migrate the workflow to OIDC when convenient.
 
 ## Repository map
 

@@ -12,7 +12,7 @@ def synthesize_template(*, protect_history: bool = False) -> Template:
         "TestStack",
         stage_name="test",
         config=StageConfig(
-            region="us-west-2",
+            region="us-east-2",
             schedule_expression="rate(1 hour)",
             protect_history=protect_history,
         ),

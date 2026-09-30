@@ -14,11 +14,11 @@ class StageConfig:
 # synthesizes a predictable template for each stage.
 STAGE_CONFIG: dict[str, StageConfig] = {
     "dev": StageConfig(
-        region="us-west-2",
+        region="us-east-2",
         schedule_expression="rate(1 hour)",
     ),
     "prod": StageConfig(
-        region="us-west-2",
+        region="us-east-2",
         schedule_expression="rate(15 minutes)",
         protect_history=True,
     ),
