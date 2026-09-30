@@ -117,6 +117,7 @@ exposed, and migrate the workflow to OIDC when convenient.
 
 ## Repository map
 
+- `docs/IMPLEMENTATION_PLAN.md`: product architecture and sequenced MVP plan.
 - `app.py`: CDK entry point and deployment environment selection.
 - `infra/application_stack.py`: deployable infrastructure unit.
 - `infra/config.py`: non-secret stage configuration.
