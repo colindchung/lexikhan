@@ -32,7 +32,11 @@ def test_removed_entry_points():
 
 
 def test_anonymous_access_denied():
-    for method, path in [("GET", "/session"), ("POST", "/reviews")]:
+    for method, path in [
+        ("GET", "/session"),
+        ("GET", "/cards/one/answer"),
+        ("POST", "/reviews"),
+    ]:
         value = event(method, path)
         del value["requestContext"]["authorizer"]
         assert handler(value, None)["statusCode"] == 401
@@ -45,10 +49,22 @@ def test_http_lifecycle(repository):
     response = handler(event(), None)
     cards = json.loads(response["body"])["cards"]
     assert len(cards) == 1 and "answer" not in cards[0]
+    before = repository.get(f"USER#{ARN}", "CARD#one")
+    revealed = handler(event(path="/cards/one/answer"), None)
+    assert revealed["statusCode"] == 200
+    assert revealed["headers"]["cache-control"] == "no-store"
+    assert json.loads(revealed["body"]) == {
+        "cardId": "one",
+        "answer": "Bonjour",
+        "examples": [],
+    }
+    assert handler(event(path="/cards/one/answer"), None) == revealed
+    assert repository.get(f"USER#{ARN}", "CARD#one") == before
+    assert repository.client.scan(TableName=repository.table_name)["Count"] == 1
     payload = {
         "reviewId": str(uuid4()),
-        "cardId": "one",
-        "version": 1,
+        "cardId": cards[0]["cardId"],
+        "version": cards[0]["version"],
         "rating": "GOOD",
     }
     value = event("POST", "/reviews", body=json.dumps(payload))
@@ -152,3 +168,76 @@ def test_base64_request(repository):
         ]
         == 400
     )
+
+
+def test_answer_is_scoped_to_verified_owner(repository):
+    repository.create_card(
+        Card.new("USER#other", "foreign", "Hi", "Secret", datetime.now(UTC))
+    )
+    missing = handler(event(path="/cards/missing/answer"), None)
+    foreign = handler(
+        event(path="/cards/foreign/answer", queryStringParameters={"userId": "other"}),
+        None,
+    )
+    assert missing["statusCode"] == 404
+    assert foreign == missing
+    repository.create_card(
+        Card.new(f"USER#{ARN}", "foreign", "Hi", "Owned", datetime.now(UTC))
+    )
+    owned = handler(event(path="/cards/foreign/answer"), None)
+    assert json.loads(owned["body"])["answer"] == "Owned"
+
+
+@pytest.mark.parametrize("card_id", ["..", "CARD%23one", "a" * 129, "hello.world"])
+def test_answer_rejects_invalid_card_id(repository, card_id):
+    assert handler(event(path=f"/cards/{card_id}/answer"), None)["statusCode"] == 400
+
+
+def test_answer_optional_content_survives_review(repository, caplog):
+    from dataclasses import replace
+
+    card = replace(
+        Card.new(f"USER#{ARN}", "one", "Hi", "Bonjour", datetime.now(UTC)),
+        explanation="A greeting",
+        examples=["Bonjour, mon ami"],
+        audioUrl="https://example.com/bonjour.mp3",
+    )
+    repository.create_card(card)
+    expected = {
+        "cardId": "one",
+        "answer": "Bonjour",
+        "explanation": "A greeting",
+        "examples": ["Bonjour, mon ami"],
+        "audioUrl": card.audioUrl,
+    }
+    assert (
+        json.loads(handler(event(path="/cards/one/answer"), None)["body"]) == expected
+    )
+    session = json.loads(handler(event(), None)["body"])["cards"][0]
+    assert not {"answer", "explanation", "examples", "audioUrl"} & session.keys()
+    payload = {
+        "reviewId": str(uuid4()),
+        "cardId": "one",
+        "version": 1,
+        "rating": "GOOD",
+    }
+    assert (
+        handler(event("POST", "/reviews", body=json.dumps(payload)), None)["statusCode"]
+        == 200
+    )
+    assert (
+        json.loads(handler(event(path="/cards/one/answer"), None)["body"]) == expected
+    )
+    assert "Bonjour" not in caplog.text and "A greeting" not in caplog.text
+
+
+def test_answer_supports_existing_cards_without_optional_fields(repository):
+    item = Card.new(f"USER#{ARN}", "one", "Hi", "Bonjour", datetime.now(UTC)).item()
+    for key in ("explanation", "examples", "audioUrl"):
+        item.pop(key)
+    repository.client.put_item(
+        TableName=repository.table_name, Item=repository.encode(item)
+    )
+    response = handler(event(path="/cards/one/answer"), None)
+    assert response["statusCode"] == 200
+    assert json.loads(response["body"])["examples"] == []

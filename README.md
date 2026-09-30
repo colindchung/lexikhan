@@ -7,6 +7,7 @@ EventBridge Scheduler schedule backed by the same Lambda function.
 
 - `GET /health` reports service health.
 - `GET /session` returns due prompts, with reviews before new cards.
+- `GET /cards/{cardId}/answer` reveals an owned card’s answer and optional context.
 - `POST /reviews` atomically records a review and its FSRS schedule.
 - Learning routes require AWS SigV4/IAM authentication; `/run` is removed.
 - EventBridge Scheduler is disabled in every stage until reminders exist.
@@ -174,7 +175,12 @@ a moment to appear; authoritative reads exclude cards already rescheduled.
 Ratings are `AGAIN`, `HARD`, `GOOD`, or `EASY`. Keep the same UUID and payload
 when retrying. Successful responses include the incremented version and
 `nextDueAt`. HTTP 409 requires refreshing the session; 503 can be retried.
-The answer-reveal endpoint and browser UI remain future work.
+Use `GET /cards/{cardId}/answer` between the prompt and rating steps. It returns
+`cardId`, `answer`, and `examples` (an empty list when absent), plus `explanation`
+and `audioUrl` when present. Missing cards and cards owned by another learner
+both return 404. Invalid card IDs return 400. Revealing is read-only, does not
+advance the schedule or version, and responses use `Cache-Control: no-store`.
+The browser UI remains future work.
 
 Each review stores the original request/result and before/after FSRS snapshots.
 The review key is `REVIEW#<uuid>` (rather than a timestamp key), allowing direct

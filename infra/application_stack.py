@@ -137,6 +137,7 @@ class ApplicationStack(Stack):
         )
         for path, method in (
             ("/session", apigwv2.HttpMethod.GET),
+            ("/cards/{cardId}/answer", apigwv2.HttpMethod.GET),
             ("/reviews", apigwv2.HttpMethod.POST),
         ):
             api.add_routes(

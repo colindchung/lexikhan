@@ -1,6 +1,6 @@
 """Persistent learning records; FSRS's JSON preserves every scheduler field."""
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 
 from fsrs import Card as FSRSCard
@@ -26,6 +26,9 @@ class Card:
     reviewCount: int = 0
     lapseCount: int = 0
     recordType: str = "CARD"
+    explanation: str | None = None
+    examples: list[str] = field(default_factory=list)
+    audioUrl: str | None = None
 
     @classmethod
     def new(
@@ -46,7 +49,9 @@ class Card:
 
     @classmethod
     def from_item(cls, item: dict) -> "Card":
-        return cls(**{key: item[key] for key in cls.__dataclass_fields__})
+        return cls(
+            **{key: item[key] for key in cls.__dataclass_fields__ if key in item}
+        )
 
     def public(self) -> dict:
         return {

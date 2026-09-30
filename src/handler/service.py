@@ -12,6 +12,20 @@ class LearningService:
         self.repository = repository
         self.scheduler = Scheduler()
 
+    def answer(self, user_id: str, card_id: str) -> dict:
+        # Scope the primary-key lookup to the authenticated learner, including
+        # when another learner has a card with the same ID.
+        item = self.repository.get(user_id, f"CARD#{card_id}")
+        if item is None or item.get("recordType") != "CARD":
+            raise NotFound("Card not found")
+        card = Card.from_item(item)
+        result = {"cardId": card_id, "answer": card.answer, "examples": card.examples}
+        if card.explanation is not None:
+            result["explanation"] = card.explanation
+        if card.audioUrl is not None:
+            result["audioUrl"] = card.audioUrl
+        return result
+
     def review(self, user_id: str, request: dict, now: datetime) -> dict:
         saved = self.repository.saved_review(user_id, request["reviewId"], request)
         if saved is not None:

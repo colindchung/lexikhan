@@ -78,7 +78,12 @@ def handler(event: dict, context) -> dict:
     route = (http.get("method"), http.get("path"))
     if route == ("GET", "/health"):
         return _response(200, {"status": "ok", "stage": os.getenv("STAGE")})
-    if route not in (("GET", "/session"), ("POST", "/reviews")):
+    answer_route = (
+        re.fullmatch(r"/cards/([^/]+)/answer", route[1] or "")
+        if route[0] == "GET"
+        else None
+    )
+    if not answer_route and route not in (("GET", "/session"), ("POST", "/reviews")):
         return _response(404, {"error": {"code": "not_found", "message": "Not found"}})
     # IAM is a temporary bridge until Cognito/JWT lands. Never accept client user IDs.
     identity = event.get("requestContext", {}).get("authorizer", {}).get("iam", {})
@@ -98,7 +103,12 @@ def handler(event: dict, context) -> dict:
             boto3.client("dynamodb"), os.environ["HISTORY_TABLE_NAME"]
         )
         now = datetime.now(UTC)
-        if route[0] == "GET":
+        if answer_route:
+            card_id = answer_route.group(1)
+            if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", card_id):
+                raise ValueError("Invalid cardId")
+            result = LearningService(repository).answer(f"USER#{user_id}", card_id)
+        elif route[0] == "GET":
             params = event.get("queryStringParameters") or {}
             cards = repository.session(
                 f"USER#{user_id}",

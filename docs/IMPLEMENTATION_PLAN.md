@@ -21,7 +21,8 @@ now adds the core backend flow (not yet deployed):
 - Bundled FSRS scheduling, durable retry results, stale-version conflicts.
 - An idempotent five-card development seed script and mocked persistence tests.
 
-Cognito, answer reveal, the web UI, and reminders remain outstanding. IAM is a
+Answer reveal now completes the implemented review API. Cognito, the web UI,
+and reminders remain outstanding. IAM is a
 temporary access-control bridge; learning keys currently use the verified caller
 ARN rather than a Cognito subject. FSRS fields are stored in a complete JSON
 snapshot. Review records use `REVIEW#<uuid>` for direct idempotency lookup and
@@ -356,5 +357,5 @@ correct.
 
 
 This scope is implemented locally, pending review and deployment. Next, finish
-Phase 2 with answer reveal and a deployed development smoke test, then replace
+Phase 2 with a deployed development smoke test, then replace
 the temporary IAM access with Cognito in Phase 3.
