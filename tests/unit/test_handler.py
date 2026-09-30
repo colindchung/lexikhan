@@ -1,31 +1,154 @@
 import json
-import sys
-from pathlib import Path
+from datetime import UTC, datetime
+from uuid import uuid4
 
-HANDLER_DIR = Path(__file__).parents[2] / "src" / "handler"
-sys.path.insert(0, str(HANDLER_DIR))
+import pytest
+from main import handler
+from models import Card
 
-from main import handler  # noqa: E402
+ARN = "arn:aws:iam::123456789012:user/test"
+
+
+def event(method="GET", path="/session", **extra):
+    return {
+        "requestContext": {
+            "http": {"method": method, "path": path},
+            "authorizer": {"iam": {"userArn": ARN}},
+        },
+        **extra,
+    }
 
 
 def test_health_route(monkeypatch):
     monkeypatch.setenv("STAGE", "test")
-
-    response = handler(
-        {
-            "requestContext": {
-                "http": {"method": "GET", "path": "/health"}
-            }
-        },
-        None,
-    )
-
+    response = handler(event(path="/health"), None)
     assert response["statusCode"] == 200
     assert json.loads(response["body"]) == {"status": "ok", "stage": "test"}
 
 
-def test_schedule_runs_job():
-    result = handler({"source": "scheduler", "stage": "test"}, None)
+def test_removed_entry_points():
+    assert handler(event("POST", "/run"), None)["statusCode"] == 404
+    assert handler({"source": "scheduler"}, None)["statusCode"] == 404
 
-    assert result["accepted"] is True
-    assert result["source"] == "scheduler"
+
+def test_anonymous_access_denied():
+    for method, path in [("GET", "/session"), ("POST", "/reviews")]:
+        value = event(method, path)
+        del value["requestContext"]["authorizer"]
+        assert handler(value, None)["statusCode"] == 401
+
+
+def test_http_lifecycle(repository):
+    repository.create_card(
+        Card.new(f"USER#{ARN}", "one", "Hello", "Bonjour", datetime.now(UTC))
+    )
+    response = handler(event(), None)
+    cards = json.loads(response["body"])["cards"]
+    assert len(cards) == 1 and "answer" not in cards[0]
+    payload = {
+        "reviewId": str(uuid4()),
+        "cardId": "one",
+        "version": 1,
+        "rating": "GOOD",
+    }
+    value = event("POST", "/reviews", body=json.dumps(payload))
+    first = handler(value, None)
+    assert first["statusCode"] == 200
+    assert handler(value, None) == first
+    payload["reviewId"] = str(uuid4())
+    assert (
+        handler(event("POST", "/reviews", body=json.dumps(payload)), None)["statusCode"]
+        == 409
+    )
+    assert json.loads(handler(event(), None)["body"])["cards"] == []
+
+
+@pytest.mark.parametrize(
+    "body", ["", "null", "[]", "{}", "{", '"text"', '{"userId":"other"}']
+)
+def test_invalid_body(repository, body):
+    response = handler(event("POST", "/reviews", body=body), None)
+    assert response["statusCode"] == 400
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"version": True},
+        {"version": 0},
+        {"rating": []},
+        {"rating": "bad"},
+        {"reviewId": "bad"},
+        {"cardId": "../x"},
+        {"typedAnswer": 1},
+        {"typedAnswer": "x" * 4001},
+        {"userId": "foreign"},
+    ],
+)
+def test_validation(repository, changes):
+    payload = {
+        "reviewId": str(uuid4()),
+        "cardId": "one",
+        "version": 1,
+        "rating": "GOOD",
+        **changes,
+    }
+    assert (
+        handler(event("POST", "/reviews", body=json.dumps(payload)), None)["statusCode"]
+        == 400
+    )
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"newLimit": "11"},
+        {"reviewLimit": "51"},
+        {"reviewLimit": "-1"},
+        {"newLimit": "abc"},
+    ],
+)
+def test_invalid_limits(repository, params):
+    assert handler(event(queryStringParameters=params), None)["statusCode"] == 400
+
+
+def test_storage_failure_is_retryable(repository, monkeypatch):
+    from botocore.exceptions import ClientError
+    from repository import Repository
+
+    def fail(*args):
+        raise ClientError(
+            {"Error": {"Code": "ProvisionedThroughputExceededException"}}, "Query"
+        )
+
+    monkeypatch.setattr(Repository, "session", fail)
+    response = handler(event(), None)
+    assert response["statusCode"] == 503
+    assert json.loads(response["body"])["error"]["code"] == "unavailable"
+
+
+def test_base64_request(repository):
+    import base64
+
+    payload = {
+        "reviewId": str(uuid4()),
+        "cardId": "missing",
+        "version": 1,
+        "rating": "GOOD",
+    }
+    response = handler(
+        event(
+            "POST",
+            "/reviews",
+            isBase64Encoded=True,
+            body=base64.b64encode(json.dumps(payload).encode()).decode(),
+        ),
+        None,
+    )
+    assert response["statusCode"] == 404
+    assert (
+        handler(event("POST", "/reviews", isBase64Encoded=True, body="!"), None)[
+            "statusCode"
+        ]
+        == 400
+    )

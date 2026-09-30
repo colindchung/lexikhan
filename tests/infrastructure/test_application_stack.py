@@ -25,7 +25,7 @@ def test_stack_contains_worker_api_and_schedule():
 
     template.resource_count_is("AWS::Lambda::Function", 1)
     template.resource_count_is("AWS::ApiGatewayV2::Api", 1)
-    template.resource_count_is("AWS::ApiGatewayV2::Route", 2)
+    template.resource_count_is("AWS::ApiGatewayV2::Route", 3)
     template.resource_count_is("AWS::Scheduler::Schedule", 1)
     template.resource_count_is("AWS::SQS::Queue", 1)
     template.resource_count_is("AWS::CloudWatch::Alarm", 2)
@@ -75,6 +75,7 @@ def test_stack_contains_worker_api_and_schedule():
         "AWS::Scheduler::Schedule",
         {
             "ScheduleExpression": "rate(1 hour)",
+            "State": "DISABLED",
             "Target": {
                 "RetryPolicy": {
                     "MaximumEventAgeInSeconds": 3600,
@@ -100,5 +101,33 @@ def test_protected_history_is_retained_and_recoverable():
                     "PointInTimeRecoveryEnabled": True,
                 },
             },
+        },
+    )
+
+
+def test_learning_routes_are_protected_and_index_is_sparse():
+    template = synthesize_template()
+    for route in ("GET /session", "POST /reviews"):
+        template.has_resource_properties(
+            "AWS::ApiGatewayV2::Route",
+            {"RouteKey": route, "AuthorizationType": "AWS_IAM"},
+        )
+    template.has_resource_properties(
+        "AWS::ApiGatewayV2::Route",
+        {"RouteKey": "GET /health", "AuthorizationType": "NONE"},
+    )
+    template.has_resource_properties(
+        "AWS::DynamoDB::Table",
+        {
+            "GlobalSecondaryIndexes": [
+                {
+                    "IndexName": "due-index",
+                    "Projection": {"ProjectionType": "ALL"},
+                    "KeySchema": [
+                        {"AttributeName": "dueUserId", "KeyType": "HASH"},
+                        {"AttributeName": "dueAt", "KeyType": "RANGE"},
+                    ],
+                }
+            ]
         },
     )
