@@ -5,12 +5,14 @@ from infra.application_stack import ApplicationStack
 from infra.config import StageConfig
 
 
-def synthesize_template(*, protect_history: bool = False) -> Template:
+def synthesize_template(
+    *, protect_history: bool = False, stage_name: str = "test"
+) -> Template:
     app = App()
     stack = ApplicationStack(
         app,
         "TestStack",
-        stage_name="test",
+        stage_name=stage_name,
         config=StageConfig(
             region="us-east-2",
             schedule_expression="rate(1 hour)",
@@ -110,7 +112,11 @@ def test_learning_routes_are_protected_and_index_is_sparse():
     for route in ("GET /session", "GET /cards/{cardId}/answer", "POST /reviews"):
         template.has_resource_properties(
             "AWS::ApiGatewayV2::Route",
-            {"RouteKey": route, "AuthorizationType": "AWS_IAM"},
+            {
+                "RouteKey": route,
+                "AuthorizationType": "JWT",
+                "AuthorizationScopes": ["aws.cognito.signin.user.admin"],
+            },
         )
     template.has_resource_properties(
         "AWS::ApiGatewayV2::Route",
@@ -131,3 +137,90 @@ def test_learning_routes_are_protected_and_index_is_sparse():
             ]
         },
     )
+
+
+def test_cognito_authentication_and_private_hosting():
+    template = synthesize_template(stage_name="prod")
+    template.has_resource_properties(
+        "AWS::Cognito::UserPool",
+        {
+            "AdminCreateUserConfig": {"AllowAdminCreateUserOnly": True},
+            "UsernameAttributes": ["email"],
+        },
+    )
+    template.has_resource_properties(
+        "AWS::Cognito::UserPoolClient",
+        {
+            "GenerateSecret": False,
+            "AllowedOAuthFlows": ["code"],
+            "AllowedOAuthScopes": Match.array_with(
+                ["openid", "aws.cognito.signin.user.admin"]
+            ),
+        },
+    )
+    template.has_resource_properties(
+        "AWS::ApiGatewayV2::Authorizer",
+        {
+            "AuthorizerType": "JWT",
+            "IdentitySource": ["$request.header.Authorization"],
+            "JwtConfiguration": {
+                "Audience": [{"Ref": Match.any_value()}],
+                "Issuer": Match.any_value(),
+            },
+        },
+    )
+    template.has_resource_properties(
+        "AWS::S3::Bucket",
+        {
+            "PublicAccessBlockConfiguration": {
+                "BlockPublicAcls": True,
+                "BlockPublicPolicy": True,
+                "IgnorePublicAcls": True,
+                "RestrictPublicBuckets": True,
+            }
+        },
+    )
+    template.has_resource_properties(
+        "AWS::CloudFront::OriginAccessControl",
+        {
+            "OriginAccessControlConfig": Match.object_like(
+                {"SigningBehavior": "always", "SigningProtocol": "sigv4"}
+            )
+        },
+    )
+    template.has_resource_properties(
+        "AWS::CloudFront::Distribution",
+        {
+            "DistributionConfig": Match.object_like(
+                {
+                    "DefaultRootObject": "index.html",
+                    "DefaultCacheBehavior": Match.object_like(
+                        {"ViewerProtocolPolicy": "redirect-to-https"}
+                    ),
+                }
+            )
+        },
+    )
+    pool_client = next(
+        iter(template.find_resources("AWS::Cognito::UserPoolClient").values())
+    )["Properties"]
+    assert "ALLOW_ADMIN_USER_PASSWORD_AUTH" not in pool_client["ExplicitAuthFlows"]
+    api = next(iter(template.find_resources("AWS::ApiGatewayV2::Api").values()))[
+        "Properties"
+    ]
+    assert len(api["CorsConfiguration"]["AllowOrigins"]) == 1
+    assert "*" not in str(api["CorsConfiguration"])
+
+
+def test_development_allows_only_fixed_local_origin_and_smoke_auth():
+    template = synthesize_template(stage_name="dev")
+    pool_client = next(
+        iter(template.find_resources("AWS::Cognito::UserPoolClient").values())
+    )["Properties"]
+    assert "ALLOW_ADMIN_USER_PASSWORD_AUTH" in pool_client["ExplicitAuthFlows"]
+    assert "http://localhost:5173/auth/callback" in pool_client["CallbackURLs"]
+    api = next(iter(template.find_resources("AWS::ApiGatewayV2::Api").values()))[
+        "Properties"
+    ]
+    assert "http://localhost:5173" in api["CorsConfiguration"]["AllowOrigins"]
+    assert len(api["CorsConfiguration"]["AllowOrigins"]) == 2

@@ -86,6 +86,32 @@ class Repository:
             + sorted(new, key=lambda c: (c.dueAt, c.itemId))
         ]
 
+    def next_review_at(self, user_id: str) -> str | None:
+        """Earliest scheduled learned card (new cards are not scheduled reviews)."""
+        cursor = {}
+        while True:
+            page = self.client.query(
+                TableName=self.table_name,
+                IndexName="due-index",
+                KeyConditionExpression="dueUserId = :user",
+                ExpressionAttributeValues=self.encode({":user": user_id}),
+                ScanIndexForward=True,
+                Limit=50,
+                **cursor,
+            )
+            for raw in page["Items"]:
+                indexed = self.decode(raw)
+                item = self.get(user_id, indexed["itemId"])
+                if (
+                    item
+                    and item["state"] != "NEW"
+                    and item["dueAt"] == indexed["dueAt"]
+                ):
+                    return item["dueAt"]
+            if "LastEvaluatedKey" not in page:
+                return None
+            cursor = {"ExclusiveStartKey": page["LastEvaluatedKey"]}
+
     def saved_review(self, user_id: str, review_id: str, request: dict) -> dict | None:
         saved = self.get(user_id, f"REVIEW#{review_id}")
         if saved:

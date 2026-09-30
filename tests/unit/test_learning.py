@@ -158,3 +158,15 @@ def test_stale_index_does_not_return_rescheduled_card(repository, monkeypatch):
         lambda **kw: {"Items": [repository.encode(card.item())]},
     )
     assert repository.session(USER, timestamp(NOW), 20, 3) == []
+
+
+def test_next_review_excludes_new_and_other_users(repository):
+    add_card(repository, "new", dueAt=timestamp(NOW - timedelta(days=1)))
+    assert repository.next_review_at(USER) is None
+    due = timestamp(NOW + timedelta(days=1))
+    add_card(repository, "learned", state="REVIEW", dueAt=due)
+    add_card(
+        repository, "later", state="REVIEW", dueAt=timestamp(NOW + timedelta(days=2))
+    )
+    add_card(repository, "foreign", userId="USER#other", state="REVIEW")
+    assert repository.next_review_at(USER) == due

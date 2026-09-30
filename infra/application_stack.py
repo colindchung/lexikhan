@@ -16,6 +16,7 @@ from aws_cdk import (
 from aws_cdk import (
     aws_cloudwatch as cloudwatch,
 )
+from aws_cdk import aws_cognito as cognito
 from aws_cdk import (
     aws_dynamodb as dynamodb,
 )
@@ -34,10 +35,11 @@ from aws_cdk import (
 from aws_cdk import (
     aws_sqs as sqs,
 )
-from aws_cdk.aws_apigatewayv2_authorizers import HttpIamAuthorizer
+from aws_cdk.aws_apigatewayv2_authorizers import HttpJwtAuthorizer
 from constructs import Construct
 
 from infra.config import StageConfig
+from infra.web_hosting import WebHosting
 
 
 class ApplicationStack(Stack):
@@ -120,11 +122,71 @@ class ApplicationStack(Stack):
         )
         history_table.grant_read_write_data(worker)
 
+        hosting = WebHosting(self, "Web", stage_name=stage_name)
+        origins = [hosting.url]
+        if stage_name == "dev":
+            origins.append("http://localhost:5173")
+        pool = cognito.UserPool(
+            self,
+            "Learners",
+            user_pool_name=f"lexikhan-{stage_name}",
+            self_sign_up_enabled=False,
+            sign_in_aliases=cognito.SignInAliases(email=True),
+            auto_verify=cognito.AutoVerifiedAttrs(email=True),
+            standard_attributes=cognito.StandardAttributes(
+                email=cognito.StandardAttribute(required=True, mutable=True)
+            ),
+            password_policy=cognito.PasswordPolicy(min_length=12),
+            account_recovery=cognito.AccountRecovery.EMAIL_ONLY,
+            removal_policy=RemovalPolicy.RETAIN
+            if stage_name == "prod"
+            else RemovalPolicy.DESTROY,
+        )
+        Tags.of(pool).add("Stage", stage_name)
+        client = pool.add_client(
+            "Browser",
+            generate_secret=False,
+            prevent_user_existence_errors=True,
+            auth_flows=cognito.AuthFlow(
+                user_srp=True, admin_user_password=stage_name == "dev"
+            ),
+            o_auth=cognito.OAuthSettings(
+                flows=cognito.OAuthFlows(authorization_code_grant=True),
+                scopes=[
+                    cognito.OAuthScope.OPENID,
+                    cognito.OAuthScope.EMAIL,
+                    cognito.OAuthScope.COGNITO_ADMIN,
+                ],
+                callback_urls=[f"{origin}/auth/callback" for origin in origins],
+                logout_urls=[f"{origin}/" for origin in origins],
+            ),
+            access_token_validity=Duration.hours(1),
+            id_token_validity=Duration.hours(1),
+            refresh_token_validity=Duration.days(30),
+        )
+        domain = pool.add_domain(
+            "SignIn",
+            cognito_domain=cognito.CognitoDomainOptions(
+                domain_prefix=f"lexikhan-{stage_name}-{self.account}"
+            ),
+        )
+        authorizer = HttpJwtAuthorizer(
+            "LearnerJwt",
+            pool.user_pool_provider_url,
+            jwt_audience=[client.user_pool_client_id],
+        )
+
         api = apigwv2.HttpApi(
             self,
             "Api",
             api_name=f"lexikhan-{stage_name}",
             description=f"Lexikhan HTTP API ({stage_name})",
+            cors_preflight=apigwv2.CorsPreflightOptions(
+                allow_origins=origins,
+                allow_methods=[apigwv2.CorsHttpMethod.GET, apigwv2.CorsHttpMethod.POST],
+                allow_headers=["authorization", "content-type"],
+                max_age=Duration.hours(1),
+            ),
         )
         integration = integrations.HttpLambdaIntegration(
             "WorkerIntegration",
@@ -144,7 +206,8 @@ class ApplicationStack(Stack):
                 path=path,
                 methods=[method],
                 integration=integration,
-                authorizer=HttpIamAuthorizer(),
+                authorizer=authorizer,
+                authorization_scopes=["aws.cognito.signin.user.admin"],
             )
 
         schedule_dlq = sqs.Queue(
@@ -222,6 +285,14 @@ class ApplicationStack(Stack):
             treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
         )
 
+        CfnOutput(self, "Stage", value=stage_name)
+        CfnOutput(self, "UserPoolId", value=pool.user_pool_id)
+        CfnOutput(self, "UserPoolClientId", value=client.user_pool_client_id)
+        CfnOutput(self, "AuthDomain", value=domain.base_url())
+        CfnOutput(self, "AuthAuthority", value=pool.user_pool_provider_url)
+        CfnOutput(self, "WebUrl", value=hosting.url)
+        CfnOutput(self, "WebBucketName", value=hosting.bucket.bucket_name)
+        CfnOutput(self, "DistributionId", value=hosting.distribution.distribution_id)
         CfnOutput(self, "ApiUrl", value=api.api_endpoint)
         CfnOutput(self, "HistoryTableName", value=history_table.table_name)
         CfnOutput(self, "WorkerFunctionName", value=worker.function_name)

@@ -6,14 +6,14 @@ import pytest
 from main import handler
 from models import Card
 
-ARN = "arn:aws:iam::123456789012:user/test"
+SUB = "f0d2a3b4-5678-4123-8123-123456789012"
 
 
 def event(method="GET", path="/session", **extra):
     return {
         "requestContext": {
             "http": {"method": method, "path": path},
-            "authorizer": {"iam": {"userArn": ARN}},
+            "authorizer": {"jwt": {"claims": {"sub": SUB, "token_use": "access"}}},
         },
         **extra,
     }
@@ -44,12 +44,12 @@ def test_anonymous_access_denied():
 
 def test_http_lifecycle(repository):
     repository.create_card(
-        Card.new(f"USER#{ARN}", "one", "Hello", "Bonjour", datetime.now(UTC))
+        Card.new(f"USER#{SUB}", "one", "Hello", "Bonjour", datetime.now(UTC))
     )
     response = handler(event(), None)
     cards = json.loads(response["body"])["cards"]
     assert len(cards) == 1 and "answer" not in cards[0]
-    before = repository.get(f"USER#{ARN}", "CARD#one")
+    before = repository.get(f"USER#{SUB}", "CARD#one")
     revealed = handler(event(path="/cards/one/answer"), None)
     assert revealed["statusCode"] == 200
     assert revealed["headers"]["cache-control"] == "no-store"
@@ -59,7 +59,7 @@ def test_http_lifecycle(repository):
         "examples": [],
     }
     assert handler(event(path="/cards/one/answer"), None) == revealed
-    assert repository.get(f"USER#{ARN}", "CARD#one") == before
+    assert repository.get(f"USER#{SUB}", "CARD#one") == before
     assert repository.client.scan(TableName=repository.table_name)["Count"] == 1
     payload = {
         "reviewId": str(uuid4()),
@@ -182,7 +182,7 @@ def test_answer_is_scoped_to_verified_owner(repository):
     assert missing["statusCode"] == 404
     assert foreign == missing
     repository.create_card(
-        Card.new(f"USER#{ARN}", "foreign", "Hi", "Owned", datetime.now(UTC))
+        Card.new(f"USER#{SUB}", "foreign", "Hi", "Owned", datetime.now(UTC))
     )
     owned = handler(event(path="/cards/foreign/answer"), None)
     assert json.loads(owned["body"])["answer"] == "Owned"
@@ -197,7 +197,7 @@ def test_answer_optional_content_survives_review(repository, caplog):
     from dataclasses import replace
 
     card = replace(
-        Card.new(f"USER#{ARN}", "one", "Hi", "Bonjour", datetime.now(UTC)),
+        Card.new(f"USER#{SUB}", "one", "Hi", "Bonjour", datetime.now(UTC)),
         explanation="A greeting",
         examples=["Bonjour, mon ami"],
         audioUrl="https://example.com/bonjour.mp3",
@@ -232,7 +232,7 @@ def test_answer_optional_content_survives_review(repository, caplog):
 
 
 def test_answer_supports_existing_cards_without_optional_fields(repository):
-    item = Card.new(f"USER#{ARN}", "one", "Hi", "Bonjour", datetime.now(UTC)).item()
+    item = Card.new(f"USER#{SUB}", "one", "Hi", "Bonjour", datetime.now(UTC)).item()
     for key in ("explanation", "examples", "audioUrl"):
         item.pop(key)
     repository.client.put_item(
@@ -241,3 +241,17 @@ def test_answer_supports_existing_cards_without_optional_fields(repository):
     response = handler(event(path="/cards/one/answer"), None)
     assert response["statusCode"] == 200
     assert json.loads(response["body"])["examples"] == []
+
+
+@pytest.mark.parametrize(
+    "authorizer",
+    [
+        {"iam": {"userArn": "arn:aws:iam::123456789012:user/test"}},
+        {"jwt": {"claims": {"sub": SUB, "token_use": "id"}}},
+        {"jwt": {"claims": {"token_use": "access"}}},
+    ],
+)
+def test_only_verified_access_token_claims_accepted(authorizer):
+    value = event()
+    value["requestContext"]["authorizer"] = authorizer
+    assert handler(value, None)["statusCode"] == 401

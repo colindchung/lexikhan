@@ -1,4 +1,4 @@
-"""HTTP adapter. Learning routes require API Gateway's verified IAM context."""
+"""HTTP adapter. Learning routes require API Gateway's verified Cognito JWT context."""
 
 import base64
 import json
@@ -85,16 +85,24 @@ def handler(event: dict, context) -> dict:
     )
     if not answer_route and route not in (("GET", "/session"), ("POST", "/reviews")):
         return _response(404, {"error": {"code": "not_found", "message": "Not found"}})
-    # IAM is a temporary bridge until Cognito/JWT lands. Never accept client user IDs.
-    identity = event.get("requestContext", {}).get("authorizer", {}).get("iam", {})
-    user_id = identity.get("userArn")
-    if not isinstance(user_id, str) or not user_id:
+    claims = (
+        event.get("requestContext", {})
+        .get("authorizer", {})
+        .get("jwt", {})
+        .get("claims", {})
+    )
+    user_id = claims.get("sub")
+    if (
+        not isinstance(user_id, str)
+        or not user_id
+        or claims.get("token_use") != "access"
+    ):
         return _response(
             401,
             {
                 "error": {
                     "code": "unauthorized",
-                    "message": "Verified IAM identity required",
+                    "message": "Verified Cognito access token required",
                 }
             },
         )
@@ -116,7 +124,10 @@ def handler(event: dict, context) -> dict:
                 _limit(params, "reviewLimit", 20, 50),
                 _limit(params, "newLimit", 3, 10),
             )
-            result = {"cards": cards}
+            result = {
+                "cards": cards,
+                "nextReviewAt": repository.next_review_at(f"USER#{user_id}"),
+            }
         else:
             result = LearningService(repository).review(
                 f"USER#{user_id}", _review_request(event), now

@@ -20,7 +20,7 @@ DECK = [
 ]
 
 
-def seed(client, table: str, user_arn: str) -> int:
+def seed(client, table: str, user_sub: str) -> int:
     metadata = client.describe_table(TableName=table)["Table"]
     tags = client.list_tags_of_resource(ResourceArn=metadata["TableArn"])["Tags"]
     if {t["Key"]: t["Value"] for t in tags}.get("Stage") != "dev":
@@ -29,7 +29,7 @@ def seed(client, table: str, user_arn: str) -> int:
     now = datetime.now(UTC)
     return sum(
         repository.create_card(
-            Card.new(f"USER#{user_arn}", f"dev-{index}", prompt, answer, now)
+            Card.new(f"USER#{user_sub}", f"dev-{index}", prompt, answer, now)
         )
         for index, (prompt, answer) in enumerate(DECK, start=1)
     )
@@ -39,9 +39,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--table", required=True)
     parser.add_argument(
-        "--user-arn",
+        "--user-sub",
         required=True,
-        help="Verified IAM caller ARN used for signed API requests",
+        help="Cognito sub of the development learner",
     )
     parser.add_argument("--profile", default=None)
     parser.add_argument("--region", default="us-east-2")
@@ -49,7 +49,7 @@ def main():
     client = boto3.Session(profile_name=args.profile, region_name=args.region).client(
         "dynamodb"
     )
-    print(f"Created {seed(client, args.table, args.user_arn)} development cards")
+    print(f"Created {seed(client, args.table, args.user_sub)} development cards")
 
 
 if __name__ == "__main__":
