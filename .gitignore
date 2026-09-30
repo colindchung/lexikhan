@@ -9,3 +9,9 @@ cdk.out/
 htmlcov/
 .DS_Store
 build/
+web/node_modules/
+web/dist/
+web/public/config.json
+web/playwright-report/
+web/test-results/
+web/*.tsbuildinfo
