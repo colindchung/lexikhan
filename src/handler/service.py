@@ -1,12 +1,58 @@
-from datetime import UTC, datetime
-from typing import Any
+from dataclasses import replace
+from datetime import datetime
+
+from fsrs import Card as FSRSCard
+from fsrs import Rating, Scheduler
+from models import Card, Review, timestamp
+from repository import Conflict, NotFound, Repository
 
 
-def run_job(*, source: str, event: dict[str, Any]) -> dict[str, Any]:
-    """Run the application operation shared by API and scheduled invocations."""
-    # Replace this stub with the application's idempotent business logic.
-    return {
-        "accepted": True,
-        "source": source,
-        "processedAt": datetime.now(UTC).isoformat(),
-    }
+class LearningService:
+    def __init__(self, repository: Repository):
+        self.repository = repository
+        self.scheduler = Scheduler()
+
+    def review(self, user_id: str, request: dict, now: datetime) -> dict:
+        saved = self.repository.saved_review(user_id, request["reviewId"], request)
+        if saved is not None:
+            return saved
+        item = self.repository.get(user_id, f"CARD#{request['cardId']}")
+        if item is None:
+            raise NotFound("Card not found")
+        card = Card.from_item(item)
+        if card.version != request["version"]:
+            # A concurrent retry may commit between our idempotency and card reads.
+            saved = self.repository.saved_review(user_id, request["reviewId"], request)
+            if saved is not None:
+                return saved
+            raise Conflict("Card version is stale; refresh the session")
+        updated, _ = self.scheduler.review_card(
+            FSRSCard.from_json(card.scheduler),
+            Rating[request["rating"].title()],
+            review_datetime=now,
+        )
+        next_card = replace(
+            card,
+            scheduler=updated.to_json(),
+            dueAt=timestamp(updated.due),
+            state=updated.state.name.upper(),
+            version=card.version + 1,
+            reviewCount=card.reviewCount + 1,
+            lapseCount=card.lapseCount
+            + int(card.state == "REVIEW" and request["rating"] == "AGAIN"),
+        )
+        result = {**next_card.public(), "nextDueAt": next_card.dueAt}
+        review = Review(
+            userId=user_id,
+            itemId=f"REVIEW#{request['reviewId']}",
+            cardId=card.itemId,
+            rating=request["rating"],
+            reviewedAt=timestamp(now),
+            previousDueAt=card.dueAt,
+            nextDueAt=next_card.dueAt,
+            previousScheduler=card.scheduler,
+            nextScheduler=next_card.scheduler,
+            request=request,
+            result=result,
+        )
+        return self.repository.record_review(next_card, review, card.version)

@@ -5,6 +5,7 @@ from aws_cdk import (
     Duration,
     RemovalPolicy,
     Stack,
+    Tags,
 )
 from aws_cdk import (
     aws_apigatewayv2 as apigwv2,
@@ -33,6 +34,7 @@ from aws_cdk import (
 from aws_cdk import (
     aws_sqs as sqs,
 )
+from aws_cdk.aws_apigatewayv2_authorizers import HttpIamAuthorizer
 from constructs import Construct
 
 from infra.config import StageConfig
@@ -57,9 +59,7 @@ class ApplicationStack(Stack):
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_MONTH,
             removal_policy=(
-                RemovalPolicy.RETAIN
-                if stage_name == "prod"
-                else RemovalPolicy.DESTROY
+                RemovalPolicy.RETAIN if stage_name == "prod" else RemovalPolicy.DESTROY
             ),
         )
 
@@ -89,6 +89,18 @@ class ApplicationStack(Stack):
             ),
         )
 
+        Tags.of(history_table).add("Stage", stage_name)
+        history_table.add_global_secondary_index(
+            index_name="due-index",
+            partition_key=dynamodb.Attribute(
+                name="dueUserId", type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="dueAt", type=dynamodb.AttributeType.STRING
+            ),
+            projection_type=dynamodb.ProjectionType.ALL,
+        )
+
         worker = lambda_.Function(
             self,
             "Worker",
@@ -96,7 +108,7 @@ class ApplicationStack(Stack):
             runtime=lambda_.Runtime.PYTHON_3_12,
             architecture=lambda_.Architecture.ARM_64,
             handler="main.handler",
-            code=lambda_.Code.from_asset("src/handler"),
+            code=lambda_.Code.from_asset("build/handler"),
             timeout=Duration.seconds(config.lambda_timeout_seconds),
             memory_size=config.lambda_memory_mb,
             tracing=lambda_.Tracing.ACTIVE,
@@ -123,11 +135,16 @@ class ApplicationStack(Stack):
             methods=[apigwv2.HttpMethod.GET],
             integration=integration,
         )
-        api.add_routes(
-            path="/run",
-            methods=[apigwv2.HttpMethod.POST],
-            integration=integration,
-        )
+        for path, method in (
+            ("/session", apigwv2.HttpMethod.GET),
+            ("/reviews", apigwv2.HttpMethod.POST),
+        ):
+            api.add_routes(
+                path=path,
+                methods=[method],
+                integration=integration,
+                authorizer=HttpIamAuthorizer(),
+            )
 
         schedule_dlq = sqs.Queue(
             self,
@@ -155,7 +172,7 @@ class ApplicationStack(Stack):
                 mode="OFF"
             ),
             schedule_expression=config.schedule_expression,
-            state="ENABLED",
+            state="DISABLED",
             target=scheduler.CfnSchedule.TargetProperty(
                 arn=worker.function_arn,
                 role_arn=scheduler_role.role_arn,

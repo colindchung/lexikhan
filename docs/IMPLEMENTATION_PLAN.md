@@ -12,18 +12,21 @@ review session from a phone and find the resulting schedule intact the next day.
 
 ## Current state
 
-The production CDK stack is deployed in `us-east-2` and currently provides:
+The initial infrastructure has been deployed. The local next-PR implementation
+now adds the core backend flow (not yet deployed):
 
-- A public HTTP API with `GET /health` and `POST /run`.
-- A Python Lambda shared by API Gateway and EventBridge Scheduler.
-- An on-demand DynamoDB table keyed by `userId` and `itemId`.
-- An EventBridge schedule that invokes the Lambda every 15 minutes.
-- A scheduler dead-letter queue, CloudWatch logs, and alarms.
-- Automated production deployment after a push to `main`.
+- Scheduler disabled in all stages; placeholder `POST /run` removed.
+- Sparse `due-index`, typed cards/reviews, transactional persistence.
+- IAM-protected `GET /session` and `POST /reviews` using verified caller identity.
+- Bundled FSRS scheduling, durable retry results, stale-version conflicts.
+- An idempotent five-card development seed script and mocked persistence tests.
 
-The Lambda still contains placeholder logic. It does not select cards, record
-reviews, calculate intervals, send notifications, or authenticate requests.
-The scheduled Lambda result is discarded.
+Cognito, answer reveal, the web UI, and reminders remain outstanding. IAM is a
+temporary access-control bridge; learning keys currently use the verified caller
+ARN rather than a Cognito subject. FSRS fields are stored in a complete JSON
+snapshot. Review records use `REVIEW#<uuid>` for direct idempotency lookup and
+retain a separate `reviewedAt` timestamp. See README for the local build and API
+workflow. These local changes do not change the deployed production stack.
 
 ## Product decisions required
 
@@ -335,7 +338,7 @@ nothing is due, and retries cannot create duplicate messages.
 
 Production data must never be used by automated tests.
 
-## Immediate next pull request
+## Current local pull request scope
 
 Keep the next change deliberately narrow:
 
@@ -350,3 +353,8 @@ Keep the next change deliberately narrow:
 Do not add AI generation, email, audio, or analytics in this pull request. The
 first priority is proving that the core learning state and review lifecycle are
 correct.
+
+
+This scope is implemented locally, pending review and deployment. Next, finish
+Phase 2 with answer reveal and a deployed development smoke test, then replace
+the temporary IAM access with Cognito in Phase 3.
