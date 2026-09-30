@@ -12,22 +12,20 @@ review session from a phone and find the resulting schedule intact the next day.
 
 ## Current state
 
-The initial infrastructure has been deployed. The local next-PR implementation
-now adds the core backend flow (not yet deployed):
+The core review flow and phases 2–4 are implemented:
 
-- Scheduler disabled in all stages; placeholder `POST /run` removed.
-- Sparse `due-index`, typed cards/reviews, transactional persistence.
-- IAM-protected `GET /session` and `POST /reviews` using verified caller identity.
-- Bundled FSRS scheduling, durable retry results, stale-version conflicts.
-- An idempotent five-card development seed script and mocked persistence tests.
+- Cognito authorization-code/PKCE sign-in with a secretless browser client.
+- JWT-protected session, answer-reveal, and transactional review APIs.
+- Sparse due index, FSRS scheduling, durable retries, and conflict handling.
+- React/TypeScript Vite mobile UI with drafts, retry recovery, and an installable shell.
+- Private S3 + CloudFront hosting and runtime configuration generated from stack outputs.
+- Disposable development-only backend and hosted-sign-in browser smoke tests.
+- Deployment from `main` validates development before publishing production.
 
-Answer reveal now completes the implemented review API. Cognito, the web UI,
-and reminders remain outstanding. IAM is a
-temporary access-control bridge; learning keys currently use the verified caller
-ARN rather than a Cognito subject. FSRS fields are stored in a complete JSON
-snapshot. Review records use `REVIEW#<uuid>` for direct idempotency lookup and
-retain a separate `reviewedAt` timestamp. See README for the local build and API
-workflow. These local changes do not change the deployed production stack.
+Learning keys now use verified Cognito subjects. Old IAM-keyed records are retained
+and require an explicit identity migration if they contain data to keep. The
+production personal account and learning deck must be provisioned before personal
+use. SMS delivery and reminders remain next; the scheduler is still disabled.
 
 ## Product decisions required
 
@@ -40,7 +38,7 @@ Resolve these before creating production learning content:
 5. Whether answers are initially self-graded or evaluated automatically.
 
 Recommended defaults are a curated starter deck of phrases, self-grading, three
-new cards per day, and one daily reminder in the learner's timezone.
+new cards per day, and one daily SMS reminder in the learner's timezone.
 
 ## Target user experience
 
@@ -97,12 +95,14 @@ EventBridge Scheduler     |
   |                       v
   +------------------> due cards
   |
-  +--> SES reminder email
+  +--> SMS provider
 ```
 
-Recommended frontend: a React and TypeScript progressive web app in `web/`,
-deployed as static assets through S3 and CloudFront. It should be installable on
-a phone and remain a separate package inside this repository.
+Selected frontend: a React and TypeScript progressive web app built with Vite
+in `web/`, deployed as static assets to a private S3 bucket served through
+CloudFront. Manage hosting in CDK and automate frontend builds and deployment
+from `main`. It should be installable on a phone and remain a separate package
+inside this repository.
 
 Use a Cognito user pool and an API Gateway JWT authorizer. Keep `GET /health`
 public, but require authentication for every endpoint that reads or changes
@@ -246,7 +246,7 @@ learner's timezone. The scheduled operation should:
 
 1. Query whether at least one card is due.
 2. Do nothing when no cards are due.
-3. Send one SES email containing the due count, estimated duration, and a link
+3. Send one SMS containing the due count, estimated duration, and a link
    to the web session.
 4. Record the reminder timestamp to prevent duplicate messages on retries.
 
@@ -293,20 +293,22 @@ user can complete a session.
 
 ### Phase 4: Build the web MVP
 
-- Create the `web/` React and TypeScript application.
+- Create the `web/` React and TypeScript application with Vite.
 - Implement sign-in, home, card prompt, answer reveal, rating, progress, and
   completion views.
 - Design mobile-first with keyboard support and accessible focus states.
 - Handle retries and HTTP `409` conflicts without losing the learner's answer.
 - Add a web manifest and installable PWA shell.
-- Deploy through S3 and CloudFront from CDK or a dedicated frontend workflow.
+- Define a private S3 origin and CloudFront distribution in CDK.
+- Build with Vite and deploy static assets automatically from `main`, including
+  cache handling and client-side route support.
 
 **Exit criteria:** the complete review flow works comfortably on a phone and a
 desktop browser.
 
 ### Phase 5: Add reminders
 
-- Verify the sender and personal recipient in SES.
+- Configure the SMS provider, sender, and personal recipient.
 - Configure a daily timezone-aware schedule.
 - Send a reminder only when reviews are due.
 - Include a direct HTTPS link to start the session.
@@ -356,6 +358,6 @@ first priority is proving that the core learning state and review lifecycle are
 correct.
 
 
-This scope is implemented locally, pending review and deployment. Next, finish
-Phase 2 with a deployed development smoke test, then replace
-the temporary IAM access with Cognito in Phase 3.
+The backend, Cognito, Vite UI, CloudFront hosting, and deployed development
+verification are implemented. Next: provision personal learning content, choose
+an SMS provider, and implement a daily reminder containing the session link.
