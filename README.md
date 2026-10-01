@@ -265,3 +265,25 @@ used. Those credentials must allow CloudFormation/CDK deployment plus Cognito
 test-user lifecycle/authentication, development DynamoDB read/write, S3 asset
 uploads, and CloudFront invalidation. Production authentication does not enable
 the admin password flow used by the smoke test.
+
+
+## Production custom domain
+
+The production custom hostname is `lexikhan.colindchung.com`. Squarespace remains
+the DNS provider. `infra/config.py` imports the DNS-validated ACM certificate in
+`us-east-1`, as required by CloudFront; that externally managed certificate must
+be `ISSUED` before deploying the custom-domain configuration. Keep the ACM
+validation CNAME in DNS for automatic renewal.
+
+Squarespace custom records (host names are relative to `colindchung.com`):
+
+| Type | Host | Data |
+| --- | --- | --- |
+| CNAME | `_bb336f47969745dd02c100f93287d033.lexikhan` | `_f2cbbc95b0796305b52b9db27ccfb4e2.wzccmgtwzk.acm-validations.aws` |
+| CNAME | `lexikhan` | `d12u67hs1yk1g8.cloudfront.net` |
+
+After validation, deploy the CDK change to attach the hostname and certificate.
+The same change adds the custom origin to Cognito callbacks/logout URLs and API
+CORS. The original CloudFront URL remains allowed so existing links keep working.
+`WebUrl` reports the custom address; `CloudFrontUrl` reports the distribution URL.
+No API custom domain, nameserver change, or Cognito custom domain is required.

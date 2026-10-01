@@ -224,3 +224,60 @@ def test_development_allows_only_fixed_local_origin_and_smoke_auth():
     ]
     assert "http://localhost:5173" in api["CorsConfiguration"]["AllowOrigins"]
     assert len(api["CorsConfiguration"]["AllowOrigins"]) == 2
+
+
+def test_custom_domain_certificate_and_signin_origins():
+    app = App()
+    arn = "arn:aws:acm:us-east-1:123456789012:certificate/test-certificate"
+    stack = ApplicationStack(
+        app,
+        "CustomDomain",
+        stage_name="prod",
+        config=StageConfig(
+            region="us-east-2",
+            schedule_expression="rate(1 day)",
+            web_domain_name="lexikhan.example.com",
+            web_certificate_arn=arn,
+        ),
+    )
+    template = Template.from_stack(stack)
+    template.has_resource_properties(
+        "AWS::CloudFront::Distribution",
+        {
+            "DistributionConfig": Match.object_like(
+                {
+                    "Aliases": ["lexikhan.example.com"],
+                    "ViewerCertificate": Match.object_like({"AcmCertificateArn": arn}),
+                }
+            )
+        },
+    )
+    template.has_resource_properties(
+        "AWS::Cognito::UserPoolClient",
+        {
+            "CallbackURLs": Match.array_with(
+                ["https://lexikhan.example.com/auth/callback"]
+            ),
+            "LogoutURLs": Match.array_with(["https://lexikhan.example.com/"]),
+        },
+    )
+    template.has_resource_properties(
+        "AWS::ApiGatewayV2::Api",
+        {
+            "CorsConfiguration": Match.object_like(
+                {"AllowOrigins": Match.array_with(["https://lexikhan.example.com"])}
+            )
+        },
+    )
+    template.has_output("WebUrl", {"Value": "https://lexikhan.example.com"})
+
+
+def test_custom_domain_requires_a_certificate():
+    import pytest
+
+    from infra.web_hosting import WebHosting
+
+    with pytest.raises(ValueError, match="must be set together"):
+        WebHosting(
+            App(), "MissingCertificate", stage_name="prod", domain_name="example.com"
+        )

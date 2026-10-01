@@ -1,6 +1,7 @@
 """Private static Vite assets served over HTTPS. Deployment uploads are separate."""
 
 from aws_cdk import RemovalPolicy
+from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_cloudfront as cloudfront
 from aws_cdk import aws_cloudfront_origins as origins
 from aws_cdk import aws_s3 as s3
@@ -8,8 +9,25 @@ from constructs import Construct
 
 
 class WebHosting(Construct):
-    def __init__(self, scope: Construct, construct_id: str, *, stage_name: str):
+    def __init__(
+        self,
+        scope: Construct,
+        construct_id: str,
+        *,
+        stage_name: str,
+        domain_name: str | None = None,
+        certificate_arn: str | None = None,
+    ):
         super().__init__(scope, construct_id)
+        if bool(domain_name) != bool(certificate_arn):
+            raise ValueError(
+                "Custom web domain and certificate ARN must be set together"
+            )
+        certificate = (
+            acm.Certificate.from_certificate_arn(self, "Certificate", certificate_arn)
+            if certificate_arn
+            else None
+        )
         self.bucket = s3.Bucket(
             self,
             "Assets",
@@ -35,6 +53,8 @@ class WebHosting(Construct):
             self,
             "Distribution",
             default_root_object="index.html",
+            domain_names=[domain_name] if domain_name else None,
+            certificate=certificate,
             default_behavior=cloudfront.BehaviorOptions(
                 origin=origin,
                 viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -56,4 +76,5 @@ class WebHosting(Construct):
                 )
             },
         )
-        self.url = f"https://{self.distribution.distribution_domain_name}"
+        self.cloudfront_url = f"https://{self.distribution.distribution_domain_name}"
+        self.url = f"https://{domain_name}" if domain_name else self.cloudfront_url

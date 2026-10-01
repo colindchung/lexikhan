@@ -122,8 +122,16 @@ class ApplicationStack(Stack):
         )
         history_table.grant_read_write_data(worker)
 
-        hosting = WebHosting(self, "Web", stage_name=stage_name)
+        hosting = WebHosting(
+            self,
+            "Web",
+            stage_name=stage_name,
+            domain_name=config.web_domain_name,
+            certificate_arn=config.web_certificate_arn,
+        )
         origins = [hosting.url]
+        if config.web_domain_name:
+            origins.append(hosting.cloudfront_url)
         if stage_name == "dev":
             origins.append("http://localhost:5173")
         pool = cognito.UserPool(
@@ -291,6 +299,7 @@ class ApplicationStack(Stack):
         CfnOutput(self, "AuthDomain", value=domain.base_url())
         CfnOutput(self, "AuthAuthority", value=pool.user_pool_provider_url)
         CfnOutput(self, "WebUrl", value=hosting.url)
+        CfnOutput(self, "CloudFrontUrl", value=hosting.cloudfront_url)
         CfnOutput(self, "WebBucketName", value=hosting.bucket.bucket_name)
         CfnOutput(self, "DistributionId", value=hosting.distribution.distribution_id)
         CfnOutput(self, "ApiUrl", value=api.api_endpoint)
