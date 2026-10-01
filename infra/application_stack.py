@@ -138,7 +138,7 @@ class ApplicationStack(Stack):
             self,
             "Learners",
             user_pool_name=f"lexikhan-{stage_name}",
-            self_sign_up_enabled=False,
+            self_sign_up_enabled=True,
             sign_in_aliases=cognito.SignInAliases(email=True),
             auto_verify=cognito.AutoVerifiedAttrs(email=True),
             standard_attributes=cognito.StandardAttributes(

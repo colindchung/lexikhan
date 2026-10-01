@@ -144,7 +144,8 @@ def test_cognito_authentication_and_private_hosting():
     template.has_resource_properties(
         "AWS::Cognito::UserPool",
         {
-            "AdminCreateUserConfig": {"AllowAdminCreateUserOnly": True},
+            "AdminCreateUserConfig": {"AllowAdminCreateUserOnly": False},
+            "AutoVerifiedAttributes": ["email"],
             "UsernameAttributes": ["email"],
         },
     )

@@ -146,10 +146,10 @@ requires `token_use=access` and derives `USER#<sub>` from verified claims.
 This standard Cognito scope is also available to the disposable development
 smoke-test user. ID tokens and the old IAM authorizer are not accepted.
 
-Self-signup is disabled. Create your personal account in the Cognito console
-using the `UserPoolId` stack output, then sign in with its temporary password and
-choose a new password in the hosted UI. No new API secrets are needed. Test
-users are created without sending invitations. Production learning content is
+Public signup is enabled. Select **Sign in to your space**, then **Sign up**
+in the Cognito hosted UI. Register with an email and password, then verify your
+email with the code Cognito sends. No new API secrets are needed. Test users
+are created without sending invitations. Production learning content is
 not automatically seeded; the language/deck choice remains a separate step.
 
 **Existing IAM-keyed data:** it is retained but is not automatically assigned to
