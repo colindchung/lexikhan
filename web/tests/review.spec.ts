@@ -56,6 +56,10 @@ test("review flow is keyboard accessible, retries safely, and fits the screen", 
   let reviewId: string;
   await page.route("https://api.example.test/**", async (route) => {
     expect(route.request().headers().authorization).toBe("Bearer test-access");
+    if (route.request().url().endsWith("/profile"))
+      return route.fulfill({
+        json: { profile: { deckId: "ur-en-v1" }, decks: [] },
+      });
     if (route.request().url().endsWith("/session"))
       return route.fulfill({ json: { cards: [card] } });
     if (route.request().url().endsWith("/answer"))
@@ -101,4 +105,93 @@ test("review flow is keyboard accessible, retries safely, and fits the screen", 
     ),
   ).toBe(true);
   expect(errors).toEqual([]);
+});
+
+test("new learner enrolls in Urdu and sees right-to-left answers", async ({
+  page,
+}) => {
+  await page.addInitScript(({ authority, clientId }) => {
+    sessionStorage.setItem(
+      `oidc.user:${authority}:${clientId}`,
+      JSON.stringify({
+        access_token: "test-access",
+        token_type: "Bearer",
+        scope: "openid email aws.cognito.signin.user.admin",
+        profile: { sub: "new-user" },
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+      }),
+    );
+  }, config);
+  const settings = {
+    deckId: "ur-en-v1",
+    learningLanguage: "ur",
+    baseLanguage: "en",
+    timezone: "America/Toronto",
+    dailyGoal: 3,
+  };
+  const deck = {
+    id: "ur-en-v1",
+    name: "Urdu essentials",
+    learningLanguage: "ur",
+    baseLanguage: "en",
+    cardCount: 12,
+  };
+  let profile: typeof settings | null = null;
+  const card = {
+    cardId: "ur-en-v1-01",
+    prompt: "Hello (a respectful greeting)",
+    state: "NEW",
+    version: 1,
+    dueAt: "2026-01-01T00:00:00Z",
+  };
+  await page.route("https://api.example.test/**", (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/profile")
+      return route.fulfill({ json: { profile, decks: [deck] } });
+    if (path === "/onboarding") {
+      expect(route.request().postDataJSON()).toEqual(settings);
+      profile = settings;
+      return route.fulfill({ json: { profile } });
+    }
+    if (path === "/session") return route.fulfill({ json: { cards: [card] } });
+    return route.fulfill({
+      json: {
+        cardId: card.cardId,
+        answer: "السلام علیکم",
+        explanation: "Assalaam alaikum — a common respectful greeting.",
+        examples: [],
+      },
+    });
+  });
+  await page.goto("/");
+  await expect(page.getByLabel("Language & starter deck")).toHaveValue(
+    "ur-en-v1",
+  );
+  await page.getByLabel("Your timezone").selectOption("America/Toronto");
+  await page.screenshot({
+    path: `test-results/onboarding-${test.info().project.name}.png`,
+    fullPage: true,
+  });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.getByRole("button", { name: /Create my practice/ }).click();
+  await page.getByRole("button", { name: /Start session/ }).click();
+  await page.getByRole("button", { name: /Reveal answer/ }).click();
+  await expect(page.getByRole("heading", { name: "السلام علیکم" })).toHaveCSS(
+    "direction",
+    "rtl",
+  );
+  await expect(page.getByText(/Assalaam alaikum/)).toBeVisible();
+  await page.screenshot({
+    path: `test-results/urdu-${test.info().project.name}.png`,
+    fullPage: true,
+  });
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "السلام علیکم" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Language & starter deck")).toHaveCount(0);
 });

@@ -407,6 +407,7 @@ export function App({
                 </label>
                 <textarea
                   id="attempt"
+                  dir="auto"
                   placeholder="Give yourself a moment to recall…"
                   value={progress.drafts[card.cardId] || ""}
                   maxLength={4000}
@@ -424,7 +425,7 @@ export function App({
                 {revealed && (
                   <div className="answer">
                     <span className="eyebrow">THE ANSWER</span>
-                    <h2>{progress.answer?.answer}</h2>
+                    <h2 dir="auto">{progress.answer?.answer}</h2>
                     {progress.answer?.explanation && (
                       <p>{progress.answer.explanation}</p>
                     )}

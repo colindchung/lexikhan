@@ -616,3 +616,49 @@ textarea::placeholder {
     transform: none;
   }
 }
+
+.onboarding {
+  max-width: 620px;
+  padding-block: 48px 64px;
+}
+.onboarding h1 {
+  margin-block: 18px;
+}
+.onboarding fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.onboarding label {
+  display: block;
+  font-weight: 600;
+  margin: 24px 0 10px;
+}
+.onboarding select {
+  width: 100%;
+  min-height: 48px;
+  font: inherit;
+  color: var(--green);
+  background: #fffdf7;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 12px;
+}
+.onboarding select:focus-visible {
+  outline: 3px solid #688640;
+  outline-offset: 4px;
+}
+.onboarding .primary {
+  margin-top: 32px;
+  width: 100%;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

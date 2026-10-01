@@ -27,6 +27,31 @@ export interface SessionResponse {
 export interface ReviewResult extends Card {
   nextDueAt: string;
 }
+export interface ProfileSettings {
+  deckId: string;
+  learningLanguage: string;
+  baseLanguage: string;
+  timezone: string;
+  dailyGoal: number;
+}
+export interface Profile extends ProfileSettings {
+  createdAt: string;
+}
+export interface Deck {
+  id: string;
+  name: string;
+  learningLanguage: string;
+  baseLanguage: string;
+  cardCount: number;
+}
+export interface ProfileResponse {
+  profile: Profile | null;
+  decks: Deck[];
+}
+export interface OnboardingApi {
+  profile(): Promise<ProfileResponse>;
+  enroll(settings: ProfileSettings): Promise<{ profile: Profile }>;
+}
 export interface LearningApi {
   session(): Promise<SessionResponse>;
   answer(cardId: string): Promise<Answer>;
@@ -43,8 +68,11 @@ export class ApiError extends Error {
 export function createApi(
   base: string,
   token: () => Promise<string>,
-): LearningApi {
-  async function request<T>(path: string, body?: Review): Promise<T> {
+): LearningApi & OnboardingApi {
+  async function request<T>(
+    path: string,
+    body?: Review | ProfileSettings,
+  ): Promise<T> {
     let response: Response;
     try {
       const accessToken = await token();
@@ -78,6 +106,8 @@ export function createApi(
     return response.json() as Promise<T>;
   }
   return {
+    profile: () => request("/profile"),
+    enroll: (body) => request("/onboarding", body),
     session: () => request("/session"),
     answer: (id) => request(`/cards/${encodeURIComponent(id)}/answer`),
     review: (body) => request("/reviews", body),

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { App, Welcome } from "./App";
+import { Onboarding } from "./Onboarding";
 import { createApi } from "./api";
 import { createAuth, loadConfig } from "./auth";
 import "@fontsource/dm-sans/latin-400.css";
@@ -37,7 +38,7 @@ async function boot() {
             {error}
           </div>
         )}
-        <App
+        <Onboarding
           api={api}
           userId={user.profile.sub}
           signIn={signIn}
@@ -48,7 +49,20 @@ async function boot() {
                 setError("Sign-out couldn’t finish. Please try again."),
               );
           }}
-        />
+        >
+          <App
+            api={api}
+            userId={user.profile.sub}
+            signIn={signIn}
+            signOut={() => {
+              void auth
+                .signOut()
+                .catch(() =>
+                  setError("Sign-out couldn’t finish. Please try again."),
+                );
+            }}
+          />
+        </Onboarding>
       </>
     ) : (
       <Welcome signIn={signIn} error={error} />

@@ -24,8 +24,8 @@ The core review flow and phases 2–4 are implemented:
 
 Learning keys now use verified Cognito subjects. Old IAM-keyed records are retained
 and require an explicit identity migration if they contain data to keep. The
-production personal account and learning deck must be provisioned before personal
-use. SMS delivery and reminders remain next; the scheduler is still disabled.
+public signup and first-login onboarding now create an account profile and
+starter deck, with Urdu from English as the default. SMS delivery and reminders remain next; the scheduler is still disabled.
 
 ## Product decisions required
 
@@ -341,23 +341,17 @@ nothing is due, and retries cannot create duplicate messages.
 
 Production data must never be used by automated tests.
 
-## Current local pull request scope
+## Latest implementation scope
 
-Keep the next change deliberately narrow:
-
-1. Disable the production scheduler.
-2. Add `due-index`.
-3. Add typed card and review models.
-4. Add the DynamoDB repository.
-5. Implement `GET /session` and `POST /reviews` without a frontend.
-6. Seed five temporary development cards.
-7. Cover the complete persistence flow with tests.
-
-Do not add AI generation, email, audio, or analytics in this pull request. The
-first priority is proving that the core learning state and review lifecycle are
-correct.
+- Public signup and first-login learner onboarding.
+- Versioned Urdu (default) and Spanish starter decks for English speakers.
+- Atomic, idempotent profile and deck enrollment without resetting existing cards.
+- A timezone and a daily goal that controls session size.
+- Authenticated profile/enrollment APIs, browser tests, and deployed development smoke coverage.
 
 
 The backend, Cognito, Vite UI, CloudFront hosting, and deployed development
-verification are implemented. Next: provision personal learning content, choose
-an SMS provider, and implement a daily reminder containing the session link.
+verification are implemented. Onboarding and atomic starter-deck enrollment are implemented, with Urdu as
+the default and a configurable timezone and session goal. Next: add reminder
+settings, choose an SMS provider, and implement a daily reminder containing the
+session link.

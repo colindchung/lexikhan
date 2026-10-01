@@ -149,8 +149,22 @@ smoke-test user. ID tokens and the old IAM authorizer are not accepted.
 Public signup is enabled. Select **Sign in to your space**, then **Sign up**
 in the Cognito hosted UI. Register with an email and password, then verify your
 email with the code Cognito sends. No new API secrets are needed. Test users
-are created without sending invitations. Production learning content is
-not automatically seeded; the language/deck choice remains a separate step.
+are created without sending invitations.
+
+On first sign-in, choose a language/deck, timezone, and daily practice goal
+(3, 5, or 10 cards). **Urdu from English** is the default: 12 everyday phrases
+with Urdu script and romanized pronunciation. Spanish from English is also
+available. The goal sets the session size, not a hard daily limit.
+
+`GET /profile` returns the learner profile and available deck metadata.
+`POST /onboarding` accepts `deckId`, `learningLanguage`, `baseLanguage`,
+`timezone` (IANA), and `dailyGoal`. Both routes require the same verified access
+token as the review API. The profile and versioned starter cards are created in
+one conditional DynamoDB transaction. Identical retries return the saved profile;
+changed settings return 409. Existing cards and review progress are preserved.
+During the first minute after enrollment, sessions use strongly consistent reads
+so starter cards are available before the due index catches up. Profile editing
+and SMS reminder settings are not implemented yet.
 
 **Existing IAM-keyed data:** it is retained but is not automatically assigned to
 a Cognito account. Any existing cards/reviews under `USER#<IAM ARN>` need an

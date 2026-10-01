@@ -125,15 +125,9 @@ def run(session, stack_name, *, browser=False):
         )
         assert http(api, "/session", token)[1]["cards"] == []
         if browser:
-            repository.create_card(
-                Card.new(
-                    user_id, "browser-smoke", "Thank you", "Merci", datetime.now(UTC)
-                )
-            )
-            for _ in range(30):
-                if http(api, "/session", token)[1]["cards"]:
-                    break
-                time.sleep(1)
+            assert http(api, "/profile")[0] == 401
+            assert http(api, "/onboarding", body={})[0] == 401
+            assert http(api, "/profile", token)[1]["profile"] is None
             subprocess.run(
                 [
                     "node",
@@ -153,7 +147,25 @@ def run(session, stack_name, *, browser=False):
                 check=True,
                 timeout=180,
             )
-            assert repository.get(user_id, "CARD#browser-smoke")["version"] == 2
+            settings = {
+                "deckId": "ur-en-v1",
+                "learningLanguage": "ur",
+                "baseLanguage": "en",
+                "timezone": "America/Toronto",
+                "dailyGoal": 3,
+            }
+            profile = http(api, "/profile", token)[1]["profile"]
+            assert all(profile[key] == value for key, value in settings.items())
+            assert http(api, "/onboarding", token, settings) == (
+                200,
+                {"profile": profile},
+            )
+            for number in range(1, 4):
+                assert (
+                    repository.get(user_id, f"CARD#ur-en-v1-{number:02}")["version"]
+                    == 2
+                )
+            assert repository.get(user_id, "CARD#ur-en-v1-04")["version"] == 1
         print(
             "PASS: authenticated session, reveal, review, retry, conflict, "
             "persisted schedule, anonymous rejection"
