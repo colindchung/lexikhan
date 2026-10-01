@@ -12,6 +12,7 @@ from uuid import UUID
 import boto3
 from botocore.exceptions import ClientError
 from models import timestamp
+from onboarding import catalog, enroll, public_profile
 from repository import Conflict, NotFound, Repository
 from service import LearningService
 
@@ -38,13 +39,17 @@ def _limit(params: dict, key: str, default: int, maximum: int) -> int:
     return int(value)
 
 
-def _review_request(event: dict) -> dict:
+def _body(event: dict):
     body = event.get("body") or ""
     if event.get("isBase64Encoded"):
         body = base64.b64decode(body, validate=True).decode("utf-8")
     if len(body) > 16000:
         raise ValueError("Request body is too large")
-    request = json.loads(body)
+    return json.loads(body)
+
+
+def _review_request(event: dict) -> dict:
+    request = _body(event)
     required = {"reviewId", "cardId", "version", "rating"}
     if (
         not isinstance(request, dict)
@@ -83,7 +88,12 @@ def handler(event: dict, context) -> dict:
         if route[0] == "GET"
         else None
     )
-    if not answer_route and route not in (("GET", "/session"), ("POST", "/reviews")):
+    if not answer_route and route not in (
+        ("GET", "/session"),
+        ("POST", "/reviews"),
+        ("GET", "/profile"),
+        ("POST", "/onboarding"),
+    ):
         return _response(404, {"error": {"code": "not_found", "message": "Not found"}})
     claims = (
         event.get("requestContext", {})
@@ -111,19 +121,39 @@ def handler(event: dict, context) -> dict:
             boto3.client("dynamodb"), os.environ["HISTORY_TABLE_NAME"]
         )
         now = datetime.now(UTC)
-        if answer_route:
+        if route == ("GET", "/profile"):
+            result = {
+                "profile": public_profile(repository.get(f"USER#{user_id}", "PROFILE")),
+                "decks": catalog(),
+            }
+        elif route == ("POST", "/onboarding"):
+            result = {
+                "profile": enroll(repository, f"USER#{user_id}", _body(event), now)
+            }
+        elif answer_route:
             card_id = answer_route.group(1)
             if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", card_id):
                 raise ValueError("Invalid cardId")
             result = LearningService(repository).answer(f"USER#{user_id}", card_id)
         elif route[0] == "GET":
             params = event.get("queryStringParameters") or {}
+            profile = repository.get(f"USER#{user_id}", "PROFILE")
+            goal = int(profile["dailyGoal"]) if profile else None
             cards = repository.session(
                 f"USER#{user_id}",
                 timestamp(now),
-                _limit(params, "reviewLimit", 20, 50),
-                _limit(params, "newLimit", 3, 10),
+                _limit(params, "reviewLimit", goal or 20, 50),
+                _limit(params, "newLimit", goal or 3, 10),
+                consistent=bool(
+                    profile
+                    and (
+                        now - datetime.fromisoformat(profile["createdAt"])
+                    ).total_seconds()
+                    < 60
+                ),
             )
+            if goal:
+                cards = cards[:goal]
             result = {
                 "cards": cards,
                 "nextReviewAt": repository.next_review_at(f"USER#{user_id}"),

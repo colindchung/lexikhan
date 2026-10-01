@@ -206,6 +206,8 @@ class ApplicationStack(Stack):
             integration=integration,
         )
         for path, method in (
+            ("/profile", apigwv2.HttpMethod.GET),
+            ("/onboarding", apigwv2.HttpMethod.POST),
             ("/session", apigwv2.HttpMethod.GET),
             ("/cards/{cardId}/answer", apigwv2.HttpMethod.GET),
             ("/reviews", apigwv2.HttpMethod.POST),

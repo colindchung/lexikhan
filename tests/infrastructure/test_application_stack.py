@@ -27,7 +27,7 @@ def test_stack_contains_worker_api_and_schedule():
 
     template.resource_count_is("AWS::Lambda::Function", 1)
     template.resource_count_is("AWS::ApiGatewayV2::Api", 1)
-    template.resource_count_is("AWS::ApiGatewayV2::Route", 4)
+    template.resource_count_is("AWS::ApiGatewayV2::Route", 6)
     template.resource_count_is("AWS::Scheduler::Schedule", 1)
     template.resource_count_is("AWS::SQS::Queue", 1)
     template.resource_count_is("AWS::CloudWatch::Alarm", 2)

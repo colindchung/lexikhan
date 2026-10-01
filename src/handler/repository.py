@@ -48,17 +48,39 @@ class Repository:
             raise
 
     def session(
-        self, user_id: str, now: str, review_limit: int, new_limit: int
+        self,
+        user_id: str,
+        now: str,
+        review_limit: int,
+        new_limit: int,
+        *,
+        consistent: bool = False,
     ) -> list:
         reviews, new = [], []
         cursor = {}
         while True:
+            query = {
+                "IndexName": "due-index",
+                "KeyConditionExpression": "dueUserId = :user AND dueAt <= :now",
+                "ExpressionAttributeValues": self.encode(
+                    {":user": user_id, ":now": now}
+                ),
+            }
+            if consistent:
+                # A just-enrolled deck must be visible before its GSI catches up.
+                query = {
+                    "ConsistentRead": True,
+                    "KeyConditionExpression": (
+                        "userId = :user AND begins_with(itemId, :card)"
+                    ),
+                    "ExpressionAttributeValues": self.encode(
+                        {":user": user_id, ":card": "CARD#"}
+                    ),
+                }
             response = self.client.query(
                 TableName=self.table_name,
-                IndexName="due-index",
-                KeyConditionExpression="dueUserId = :user AND dueAt <= :now",
-                ExpressionAttributeValues=self.encode({":user": user_id, ":now": now}),
                 ScanIndexForward=True,
+                **query,
                 **cursor,
             )
             for raw in response["Items"]:
@@ -71,10 +93,11 @@ class Repository:
                 target, limit = (
                     (new, new_limit) if card.state == "NEW" else (reviews, review_limit)
                 )
-                if len(target) < limit:
+                if consistent or len(target) < limit:
                     target.append(card)
             if (
-                len(reviews) >= review_limit
+                not consistent
+                and len(reviews) >= review_limit
                 and len(new) >= new_limit
                 or "LastEvaluatedKey" not in response
             ):
@@ -82,8 +105,8 @@ class Repository:
             cursor = {"ExclusiveStartKey": response["LastEvaluatedKey"]}
         return [
             c.public()
-            for c in sorted(reviews, key=lambda c: (c.dueAt, c.itemId))
-            + sorted(new, key=lambda c: (c.dueAt, c.itemId))
+            for c in sorted(reviews, key=lambda c: (c.dueAt, c.itemId))[:review_limit]
+            + sorted(new, key=lambda c: (c.dueAt, c.itemId))[:new_limit]
         ]
 
     def next_review_at(self, user_id: str) -> str | None:

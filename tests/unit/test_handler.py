@@ -132,7 +132,7 @@ def test_storage_failure_is_retryable(repository, monkeypatch):
     from botocore.exceptions import ClientError
     from repository import Repository
 
-    def fail(*args):
+    def fail(*args, **kwargs):
         raise ClientError(
             {"Error": {"Code": "ProvisionedThroughputExceededException"}}, "Query"
         )
