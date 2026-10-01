@@ -26,9 +26,24 @@ def repository(monkeypatch):
             ],
             AttributeDefinitions=[
                 {"AttributeName": name, "AttributeType": "S"}
-                for name in ("userId", "itemId", "dueUserId", "dueAt")
+                for name in (
+                    "userId",
+                    "itemId",
+                    "dueUserId",
+                    "dueAt",
+                    "reminderGroup",
+                    "nextReminderAt",
+                )
             ],
             GlobalSecondaryIndexes=[
+                {
+                    "IndexName": "reminder-index",
+                    "Projection": {"ProjectionType": "KEYS_ONLY"},
+                    "KeySchema": [
+                        {"AttributeName": "reminderGroup", "KeyType": "HASH"},
+                        {"AttributeName": "nextReminderAt", "KeyType": "RANGE"},
+                    ],
+                },
                 {
                     "IndexName": "due-index",
                     "Projection": {"ProjectionType": "ALL"},
@@ -36,7 +51,7 @@ def repository(monkeypatch):
                         {"AttributeName": "dueUserId", "KeyType": "HASH"},
                         {"AttributeName": "dueAt", "KeyType": "RANGE"},
                     ],
-                }
+                },
             ],
             Tags=[{"Key": "Stage", "Value": "dev"}],
         )

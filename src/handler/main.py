@@ -13,6 +13,7 @@ import boto3
 from botocore.exceptions import ClientError
 from models import timestamp
 from onboarding import catalog, enroll, public_profile
+from reminders import public_settings, save_settings
 from repository import Conflict, NotFound, Repository
 from service import LearningService
 
@@ -92,6 +93,8 @@ def handler(event: dict, context) -> dict:
         ("GET", "/session"),
         ("POST", "/reviews"),
         ("GET", "/profile"),
+        ("GET", "/reminders"),
+        ("POST", "/reminders"),
         ("POST", "/onboarding"),
     ):
         return _response(404, {"error": {"code": "not_found", "message": "Not found"}})
@@ -121,7 +124,11 @@ def handler(event: dict, context) -> dict:
             boto3.client("dynamodb"), os.environ["HISTORY_TABLE_NAME"]
         )
         now = datetime.now(UTC)
-        if route == ("GET", "/profile"):
+        if route == ("GET", "/reminders"):
+            result = public_settings(repository, f"USER#{user_id}")
+        elif route == ("POST", "/reminders"):
+            result = save_settings(repository, f"USER#{user_id}", _body(event), now)
+        elif route == ("GET", "/profile"):
             result = {
                 "profile": public_profile(repository.get(f"USER#{user_id}", "PROFILE")),
                 "decks": catalog(),

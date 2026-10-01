@@ -26,6 +26,7 @@ from aws_cdk import (
 from aws_cdk import (
     aws_lambda as lambda_,
 )
+from aws_cdk import aws_lambda_destinations as destinations
 from aws_cdk import (
     aws_logs as logs,
 )
@@ -101,6 +102,17 @@ class ApplicationStack(Stack):
                 name="dueAt", type=dynamodb.AttributeType.STRING
             ),
             projection_type=dynamodb.ProjectionType.ALL,
+        )
+
+        history_table.add_global_secondary_index(
+            index_name="reminder-index",
+            partition_key=dynamodb.Attribute(
+                name="reminderGroup", type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="nextReminderAt", type=dynamodb.AttributeType.STRING
+            ),
+            projection_type=dynamodb.ProjectionType.KEYS_ONLY,
         )
 
         worker = lambda_.Function(
@@ -207,6 +219,8 @@ class ApplicationStack(Stack):
         )
         for path, method in (
             ("/profile", apigwv2.HttpMethod.GET),
+            ("/reminders", apigwv2.HttpMethod.GET),
+            ("/reminders", apigwv2.HttpMethod.POST),
             ("/onboarding", apigwv2.HttpMethod.POST),
             ("/session", apigwv2.HttpMethod.GET),
             ("/cards/{cardId}/answer", apigwv2.HttpMethod.GET),
@@ -228,13 +242,62 @@ class ApplicationStack(Stack):
             encryption=sqs.QueueEncryption.SQS_MANAGED,
         )
 
+        reminder_worker = lambda_.Function(
+            self,
+            "ReminderWorker",
+            function_name=f"lexikhan-reminders-{stage_name}",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            architecture=lambda_.Architecture.ARM_64,
+            handler="sms_worker.handler",
+            code=lambda_.Code.from_asset("build/handler"),
+            timeout=Duration.seconds(60),
+            memory_size=256,
+            reserved_concurrent_executions=1,
+            environment={
+                "HISTORY_TABLE_NAME": history_table.table_name,
+                "WEB_URL": hosting.url,
+            },
+            log_group=logs.LogGroup(
+                self, "ReminderLogs", retention=logs.RetentionDays.ONE_MONTH
+            ),
+            retry_attempts=0,
+            max_event_age=Duration.hours(1),
+            on_failure=destinations.SqsDestination(schedule_dlq),
+        )
+        history_table.grant_read_write_data(reminder_worker)
+        reminder_worker.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["sns:Publish", "sns:CheckIfPhoneNumberIsOptedOut"],
+                resources=["*"],
+            )
+        )
+        reminder_worker.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "sms-voice:SendTextMessage",
+                    "sms-voice:DescribeOptedOutNumbers",
+                ],
+                resources=["*"],
+                conditions={"StringEquals": {"aws:CalledViaLast": "sns.amazonaws.com"}},
+            )
+        )
+        cloudwatch.Alarm(
+            self,
+            "ReminderErrorsAlarm",
+            alarm_name=f"lexikhan-reminder-errors-{stage_name}",
+            metric=reminder_worker.metric_errors(period=Duration.minutes(5)),
+            evaluation_periods=1,
+            threshold=1,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+        )
+
         scheduler_role = iam.Role(
             self,
             "SchedulerRole",
             assumed_by=iam.ServicePrincipal("scheduler.amazonaws.com"),
             description=f"Allows the {stage_name} schedule to invoke the worker",
         )
-        worker.grant_invoke(scheduler_role)
+        reminder_worker.grant_invoke(scheduler_role)
         schedule_dlq.grant_send_messages(scheduler_role)
 
         scheduler.CfnSchedule(
@@ -246,13 +309,13 @@ class ApplicationStack(Stack):
                 mode="OFF"
             ),
             schedule_expression=config.schedule_expression,
-            state="DISABLED",
+            state="ENABLED" if config.reminders_enabled else "DISABLED",
             target=scheduler.CfnSchedule.TargetProperty(
-                arn=worker.function_arn,
+                arn=reminder_worker.function_arn,
                 role_arn=scheduler_role.role_arn,
                 input=json.dumps(
                     {
-                        "source": "scheduler",
+                        "source": "lexikhan.reminders",
                         "stage": stage_name,
                     }
                 ),
@@ -295,6 +358,7 @@ class ApplicationStack(Stack):
             treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
         )
 
+        CfnOutput(self, "ReminderFunctionName", value=reminder_worker.function_name)
         CfnOutput(self, "Stage", value=stage_name)
         CfnOutput(self, "UserPoolId", value=pool.user_pool_id)
         CfnOutput(self, "UserPoolClientId", value=client.user_pool_client_id)
