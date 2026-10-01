@@ -32,6 +32,13 @@ try {
   await page.getByText("Your progress is saved. Let it settle in.").waitFor();
   await page.reload();
   await page.getByText("Your progress is saved. Let it settle in.").waitFor();
+  await page.getByRole("button", { name: "Reminders", exact: true }).click();
+  await page.getByText(/SMS setup is pending/).waitFor();
+  if (!(await page.getByRole("checkbox").isDisabled()))
+    throw new Error("Unapproved SMS must be unavailable");
+  await page.getByRole("button", { name: "Save reminders" }).click();
+  await page.getByText("Reminders are off.").waitFor();
+  await page.getByRole("button", { name: "Back to practice" }).click();
   await page.getByRole("button", { name: /Sign out/ }).click();
   await page.getByRole("button", { name: /Sign in to your space/ }).waitFor();
   console.log(

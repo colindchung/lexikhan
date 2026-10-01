@@ -120,11 +120,13 @@ export function App({
   userId,
   signIn,
   signOut,
+  openReminders,
 }: {
   api: LearningApi;
   userId: string;
   signIn: () => void;
   signOut: () => void;
+  openReminders?: () => void;
 }) {
   const key = `lexikhan:session:${userId}`;
   const [progress, setProgress] = useState<Progress>(
@@ -228,9 +230,20 @@ export function App({
     <div className="app">
       <header>
         <Brand />
-        <button className="text-button" onClick={signOut} disabled={busy}>
-          Sign out <span aria-hidden="true">↗</span>
-        </button>
+        <div className="header-actions">
+          {openReminders && (
+            <button
+              className="text-button"
+              onClick={openReminders}
+              disabled={busy}
+            >
+              Reminders
+            </button>
+          )}
+          <button className="text-button" onClick={signOut} disabled={busy}>
+            Sign out <span aria-hidden="true">↗</span>
+          </button>
+        </div>
       </header>
       <main aria-busy={busy}>
         {error && (

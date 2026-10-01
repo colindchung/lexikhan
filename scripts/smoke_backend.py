@@ -125,6 +125,8 @@ def run(session, stack_name, *, browser=False):
         )
         assert http(api, "/session", token)[1]["cards"] == []
         if browser:
+            assert http(api, "/reminders")[0] == 401
+            assert http(api, "/reminders", body={})[0] == 401
             assert http(api, "/profile")[0] == 401
             assert http(api, "/onboarding", body={})[0] == 401
             assert http(api, "/profile", token)[1]["profile"] is None
@@ -146,6 +148,22 @@ def run(session, stack_name, *, browser=False):
                 text=True,
                 check=True,
                 timeout=180,
+            )
+            reminder = http(api, "/reminders", token)[1]
+            assert not reminder["enabled"] and not reminder["available"]
+            assert (
+                http(
+                    api,
+                    "/reminders",
+                    token,
+                    {
+                        "enabled": True,
+                        "time": "18:00",
+                        "timezone": "America/Toronto",
+                        "version": reminder["version"],
+                    },
+                )[0]
+                == 400
             )
             settings = {
                 "deckId": "ur-en-v1",

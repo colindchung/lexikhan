@@ -13,7 +13,7 @@ AWS infrastructure is managed with CDK.
 - Learning routes require Cognito access tokens validated by the API Gateway JWT
   authorizer. The browser signs in with authorization code + PKCE; no client secret.
 - A private S3 bucket serves the Vite app through CloudFront origin access control.
-- EventBridge Scheduler is disabled in every stage until reminders exist.
+- EventBridge Scheduler checks production reminders every five minutes; development stays disabled.
 - Scheduler retries failed delivery twice and sends exhausted deliveries to an
   encrypted SQS dead-letter queue.
 - CloudWatch Logs are retained for one month.
@@ -132,7 +132,8 @@ exposed, and migrate the workflow to OIDC when convenient.
 - `app.py`: CDK entry point and deployment environment selection.
 - `infra/application_stack.py`: deployable infrastructure unit.
 - `infra/config.py`: non-secret stage configuration.
-- `src/handler/main.py`: API and scheduler event adapter.
+- `src/handler/main.py`: authenticated HTTP API adapter.
+- `src/handler/sms_worker.py`: scheduled AWS SNS reminder worker.
 - `src/handler/service.py`: shared business logic.
 - `tests/unit`: Lambda behavior tests.
 - `tests/infrastructure`: synthesized-template assertions.
@@ -163,8 +164,8 @@ token as the review API. The profile and versioned starter cards are created in
 one conditional DynamoDB transaction. Identical retries return the saved profile;
 changed settings return 409. Existing cards and review progress are preserved.
 During the first minute after enrollment, sessions use strongly consistent reads
-so starter cards are available before the due index catches up. Profile editing
-and SMS reminder settings are not implemented yet.
+so starter cards are available before the due index catches up. Profile editing is not implemented yet. SMS reminder settings are available
+from **Reminders** after onboarding; see [AWS SMS setup](docs/SMS_SETUP.md).
 
 **Existing IAM-keyed data:** it is retained but is not automatically assigned to
 a Cognito account. Any existing cards/reviews under `USER#<IAM ARN>` need an
@@ -301,3 +302,11 @@ The same change adds the custom origin to Cognito callbacks/logout URLs and API
 CORS. The original CloudFront URL remains allowed so existing links keep working.
 `WebUrl` reports the custom address; `CloudFrontUrl` reports the distribution URL.
 No API custom domain, nameserver change, or Cognito custom domain is required.
+
+## SMS reminders
+
+AWS SNS integration, opt-in settings, and a five-minute production reminder
+scheduler are implemented. Sending requires a verified destination approved for
+the learner and an AWS origination number. No new API secrets are required.
+See [setup and delivery semantics](docs/SMS_SETUP.md) for Canadian sender setup,
+phone verification, duplicate prevention, and operational limits.

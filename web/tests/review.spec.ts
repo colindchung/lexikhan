@@ -146,6 +146,18 @@ test("new learner enrolls in Urdu and sees right-to-left answers", async ({
   };
   await page.route("https://api.example.test/**", (route) => {
     const path = new URL(route.request().url()).pathname;
+    if (path === "/reminders")
+      return route.fulfill({
+        json: {
+          enabled: false,
+          available: false,
+          phone: null,
+          time: "18:00",
+          timezone: "America/Toronto",
+          version: 0,
+          nextReminderAt: null,
+        },
+      });
     if (path === "/profile")
       return route.fulfill({ json: { profile, decks: [deck] } });
     if (path === "/onboarding") {
@@ -194,4 +206,20 @@ test("new learner enrolls in Urdu and sees right-to-left answers", async ({
     page.getByRole("heading", { name: "السلام علیکم" }),
   ).toBeVisible();
   await expect(page.getByLabel("Language & starter deck")).toHaveCount(0);
+  await page.getByRole("button", { name: "Reminders", exact: true }).click();
+  await expect(page.getByRole("checkbox")).toBeDisabled();
+  await expect(page.getByText(/SMS setup is pending/)).toBeVisible();
+  await page.screenshot({
+    path: `test-results/reminders-${test.info().project.name}.png`,
+    fullPage: true,
+  });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.getByRole("button", { name: "Back to practice" }).click();
+  await expect(
+    page.getByRole("heading", { name: "السلام علیکم" }),
+  ).toBeVisible();
 });

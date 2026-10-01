@@ -662,3 +662,38 @@ textarea::placeholder {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.header-actions .text-button {
+  padding-inline: 8px;
+}
+.onboarding input[type="time"] {
+  width: 100%;
+  font: inherit;
+  padding: 12px;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--green);
+  background: #fffdf7;
+}
+.onboarding .consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  line-height: 1.5;
+}
+.consent input {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  accent-color: var(--green);
+}
+.onboarding input:focus-visible {
+  outline: 3px solid #688640;
+  outline-offset: 4px;
+}

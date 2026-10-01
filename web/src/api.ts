@@ -52,6 +52,21 @@ export interface OnboardingApi {
   profile(): Promise<ProfileResponse>;
   enroll(settings: ProfileSettings): Promise<{ profile: Profile }>;
 }
+export interface ReminderInput {
+  enabled: boolean;
+  time: string;
+  timezone: string;
+  version: number;
+}
+export interface ReminderSettings extends ReminderInput {
+  phone: string | null;
+  available: boolean;
+  nextReminderAt: string | null;
+}
+export interface ReminderApi {
+  reminders(): Promise<ReminderSettings>;
+  saveReminders(settings: ReminderInput): Promise<ReminderSettings>;
+}
 export interface LearningApi {
   session(): Promise<SessionResponse>;
   answer(cardId: string): Promise<Answer>;
@@ -68,10 +83,10 @@ export class ApiError extends Error {
 export function createApi(
   base: string,
   token: () => Promise<string>,
-): LearningApi & OnboardingApi {
+): LearningApi & OnboardingApi & ReminderApi {
   async function request<T>(
     path: string,
-    body?: Review | ProfileSettings,
+    body?: Review | ProfileSettings | ReminderInput,
   ): Promise<T> {
     let response: Response;
     try {
@@ -106,6 +121,8 @@ export function createApi(
     return response.json() as Promise<T>;
   }
   return {
+    reminders: () => request("/reminders"),
+    saveReminders: (body) => request("/reminders", body),
     profile: () => request("/profile"),
     enroll: (body) => request("/onboarding", body),
     session: () => request("/session"),

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { App, Welcome } from "./App";
+import { Reminders } from "./Reminders";
 import { Onboarding } from "./Onboarding";
 import { createApi } from "./api";
 import { createAuth, loadConfig } from "./auth";
@@ -25,6 +26,7 @@ async function boot() {
   const user = await auth.manager.getUser();
   const api = createApi(config.apiUrl, auth.token);
   function Experience() {
+    const [showReminders, setShowReminders] = useState(false);
     const [error, setError] = useState<string>();
     const signIn = () => {
       void auth
@@ -50,18 +52,27 @@ async function boot() {
               );
           }}
         >
-          <App
-            api={api}
-            userId={user.profile.sub}
-            signIn={signIn}
-            signOut={() => {
-              void auth
-                .signOut()
-                .catch(() =>
-                  setError("Sign-out couldn’t finish. Please try again."),
-                );
-            }}
-          />
+          {showReminders ? (
+            <Reminders
+              api={api}
+              signIn={signIn}
+              close={() => setShowReminders(false)}
+            />
+          ) : (
+            <App
+              openReminders={() => setShowReminders(true)}
+              api={api}
+              userId={user.profile.sub}
+              signIn={signIn}
+              signOut={() => {
+                void auth
+                  .signOut()
+                  .catch(() =>
+                    setError("Sign-out couldn’t finish. Please try again."),
+                  );
+              }}
+            />
+          )}
         </Onboarding>
       </>
     ) : (

@@ -25,7 +25,8 @@ The core review flow and phases 2–4 are implemented:
 Learning keys now use verified Cognito subjects. Old IAM-keyed records are retained
 and require an explicit identity migration if they contain data to keep. The
 public signup and first-login onboarding now create an account profile and
-starter deck, with Urdu from English as the default. SMS delivery and reminders remain next; the scheduler is still disabled.
+starter deck, with Urdu from English as the default. AWS SNS reminders and settings are implemented; the production scheduler checks
+every five minutes. Real delivery awaits sender and verified-recipient setup.
 
 ## Product decisions required
 
@@ -241,8 +242,8 @@ CDK bundling before adding FSRS.
 
 ## Scheduler and reminders
 
-Change the production schedule from every 15 minutes to once daily in the
-learner's timezone. The scheduled operation should:
+The production scheduler checks every five minutes. Each learner has one daily
+reminder opportunity in their timezone. The scheduled operation should:
 
 1. Query whether at least one card is due.
 2. Do nothing when no cards are due.
@@ -352,6 +353,5 @@ Production data must never be used by automated tests.
 
 The backend, Cognito, Vite UI, CloudFront hosting, and deployed development
 verification are implemented. Onboarding and atomic starter-deck enrollment are implemented, with Urdu as
-the default and a configurable timezone and session goal. Next: add reminder
-settings, choose an SMS provider, and implement a daily reminder containing the
-session link.
+the default and a configurable timezone and session goal. AWS SNS integration and reminder settings are implemented. Next: complete the
+Canadian sender and destination setup in `SMS_SETUP.md`, then verify a real text.
