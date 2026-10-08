@@ -130,22 +130,99 @@ def email_content(entry, web_url):
         f"under Reminders: {web_url}/"
     )
     text = (
-        f"Your daily {language}\n\n{entry['text']}\n"
-        + (f"{pronunciation}\n" if pronunciation else "")
-        + f"{entry['meaning']}\n\n{footer}"
+        f"lexikhan — A little, every day\n\nYour daily {language}\n\n"
+        f"{entry['text']}\n"
+        + (f"Romanized pronunciation: {pronunciation}\n" if pronunciation else "")
+        + f"Meaning: {entry['meaning']}\n\n{footer}"
     )
     direction = "rtl" if entry["language"] == "ur" else "ltr"
-    html = (
-        '<!doctype html><html><body style="font-family:Arial,sans-serif;'
-        'max-width:560px;margin:auto;padding:32px;color:#222">'
-        f"<p>Your daily {language}</p>"
-        f'<h1 lang="{entry["language"]}" dir="{direction}">{escape(entry["text"])}</h1>'
-        + (f"<p>{escape(pronunciation)}</p>" if pronunciation else "")
-        + f"<p>{escape(entry['meaning'])}</p>"
-        '<hr><p style="font-size:13px">To stop daily vocabulary emails, '
-        f'<a href="{escape(web_url, quote=True)}/">sign in</a> and turn off '
-        "reminders under Reminders.</p></body></html>"
+    word_font = "56px" if entry["language"] == "ur" else "48px"
+    url = escape(web_url.rstrip("/") + "/", quote=True)
+    label_style = (
+        "margin:0;color:#647268;font:12px/1.5 Arial,sans-serif;"
+        "letter-spacing:1.5px;text-transform:uppercase"
     )
+    pronunciation_html = ""
+    if pronunciation:
+        pronunciation_html = f"""
+        <tr><td style="padding:24px 28px 0">
+          <p style="{label_style}">Romanized pronunciation</p>
+          <p lang="ur-Latn" dir="ltr" style="margin:8px 0 0;color:#224c3f;
+            font:28px/1.5 Georgia,serif">{escape(pronunciation)}</p>
+        </td></tr>"""
+    html = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Your daily {language} · Lexikhan</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f5f3ed;color:#273c34">
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all">
+    {escape(pronunciation)} — {escape(entry["meaning"])}. A little, every day.
+  </div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+    bgcolor="#f5f3ed" style="background-color:#f5f3ed">
+    <tr><td align="center" style="padding:32px 16px">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+        style="width:100%;max-width:600px">
+        <tr><td style="padding:0 0 28px">
+          <table role="presentation" cellpadding="0" cellspacing="0">
+            <tr>
+              <td width="42" height="44" align="center" bgcolor="#224c3f"
+                style="border-radius:9px;background-color:#224c3f;
+                font:30px/44px Georgia,serif;color:#faf9f2">
+                L<span style="color:#d6dc92">•</span>
+              </td>
+              <td style="padding-left:12px">
+                <a href="{url}" style="color:#273c34;text-decoration:none;
+                  font:bold 26px/1.2 Arial,sans-serif;letter-spacing:-1px">
+                  lexikhan</a>
+              </td>
+            </tr>
+          </table>
+          <p style="margin:16px 0 0;color:#647268;font:11px/1.5 Arial,sans-serif;
+            letter-spacing:2px">A LITTLE, EVERY DAY</p>
+        </td></tr>
+        <tr><td bgcolor="#fffdf7" style="background-color:#fffdf7;
+          border:1px solid #d9ddd2;border-radius:16px">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="padding:28px 28px 0">
+              <p style="{label_style}">YOUR DAILY {language.upper()}</p>
+            </td></tr>
+            <tr><td style="padding:24px 28px 28px">
+              <h1 lang="{entry["language"]}" dir="{direction}"
+                style="margin:0;color:#224c3f;font-family:Georgia,
+                'Times New Roman',serif;font-size:{word_font};font-weight:400;
+                line-height:1.65;text-align:left;overflow-wrap:break-word">
+                {escape(entry["text"])}</h1>
+            </td></tr>
+            <tr><td style="padding:0 28px">
+              <table role="presentation" width="100%" cellpadding="0"
+                cellspacing="0"><tr><td height="1" bgcolor="#d9ddd2"
+                  style="font-size:0;line-height:0">&nbsp;</td></tr></table>
+            </td></tr>
+            {pronunciation_html}
+            <tr><td style="padding:24px 28px 32px">
+              <p style="{label_style}">Meaning</p>
+              <p style="margin:8px 0 0;color:#273c34;
+                font:24px/1.5 Arial,sans-serif">{escape(entry["meaning"])}</p>
+            </td></tr>
+          </table>
+        </td></tr>
+        <tr><td style="padding:24px 4px 0;color:#647268;
+          font:14px/1.7 Arial,sans-serif">
+          <p style="margin:0">One small addition to your everyday vocabulary.</p>
+          <p style="margin:12px 0 0">
+            <a href="{url}" style="color:#224c3f;text-decoration:underline">
+              Manage your emails</a><br>
+            To stop daily emails, sign in and turn off reminders under Reminders.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>"""
     return {
         "Subject": {
             "Data": f"Your daily {language}: {entry['meaning']}",
