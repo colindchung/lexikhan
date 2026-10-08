@@ -1,3 +1,4 @@
+import { Navbar } from "./Navbar";
 import { useEffect, useRef, useState } from "react";
 import type { Answer, Card, LearningApi, Rating, Review } from "./api";
 import { ApiError } from "./api";
@@ -50,16 +51,6 @@ export function nextDate(value?: string | null) {
   if (new Date(value).getTime() <= Date.now()) return "More cards are ready.";
   return `Next review ${new Intl.DateTimeFormat(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" }).format(new Date(value))}.`;
 }
-export function Brand() {
-  return (
-    <a className="brand" href="/" aria-label="Lexikhan home">
-      <span className="brand-mark" aria-hidden="true">
-        L<span>•</span>
-      </span>
-      lexikhan
-    </a>
-  );
-}
 export function Welcome({
   signIn,
   signUp,
@@ -73,9 +64,7 @@ export function Welcome({
 }) {
   return (
     <div className="app">
-      <header>
-        <Brand />
-      </header>
+      <Navbar />
       <main className="welcome">
         <div className="eyebrow">LANGUAGE PRACTICE</div>
         <h1>Learn everyday language.</h1>
@@ -115,15 +104,11 @@ export function App({
   userId,
   signIn,
   signOut,
-  openReminders,
-  openChats,
 }: {
   api: LearningApi;
   userId: string;
   signIn: () => void;
   signOut: () => void;
-  openReminders?: () => void;
-  openChats?: () => void;
 }) {
   const key = `lexikhan:session:${userId}`;
   const [progress, setProgress] = useState<Progress>(
@@ -225,28 +210,7 @@ export function App({
   const newCount = progress.cards.length - reviewCount;
   return (
     <div className="app">
-      <header>
-        <Brand />
-        <div className="header-actions">
-          {openReminders && (
-            <button
-              className="text-button"
-              onClick={openReminders}
-              disabled={busy}
-            >
-              Reminders
-            </button>
-          )}
-          {openChats && (
-            <button className="text-button" onClick={openChats} disabled={busy}>
-              Language chat
-            </button>
-          )}
-          <button className="text-button" onClick={signOut} disabled={busy}>
-            Sign out <span aria-hidden="true">↗</span>
-          </button>
-        </div>
-      </header>
+      <Navbar signOut={signOut} disabled={busy} />
       <main aria-busy={busy}>
         {error && (
           <div className="notice" role="alert">

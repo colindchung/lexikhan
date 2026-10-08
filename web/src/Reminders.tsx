@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReminderApi, ReminderSettings } from "./api";
 import { ApiError } from "./api";
-import { Brand } from "./App";
+import { Navbar } from "./Navbar";
 
 export function Reminders({
   api,
-  close,
+  signOut,
   signIn,
 }: {
   api: ReminderApi;
-  close: () => void;
+  signOut: () => void;
   signIn: () => void;
 }) {
   const [settings, setSettings] = useState<ReminderSettings>();
@@ -71,12 +71,7 @@ export function Reminders({
   ).sort();
   return (
     <div className="app">
-      <header>
-        <Brand />
-        <button className="text-button" onClick={close} disabled={busy}>
-          Back to practice
-        </button>
-      </header>
+      <Navbar signOut={signOut} disabled={busy} />
       <main className="onboarding" aria-busy={busy}>
         <div className="eyebrow">EMAIL</div>
         <h1 ref={heading} tabIndex={-1}>

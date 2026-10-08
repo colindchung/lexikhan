@@ -1,6 +1,7 @@
+import { Navbar } from "./Navbar";
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { App, Brand, Welcome } from "./App";
+import { App, Welcome } from "./App";
 import { navigate, returnPath, useRoute } from "./routes";
 import { Chats } from "./Chats";
 import { Reminders } from "./Reminders";
@@ -14,12 +15,18 @@ import "@fontsource/libre-caslon-display/latin-400.css";
 import "./style.css";
 
 const root = createRoot(document.getElementById("root")!);
-function AuthStatus({ error, retry }: { error?: string; retry?: () => void }) {
+function AuthStatus({
+  error,
+  retry,
+  signOut,
+}: {
+  error?: string;
+  retry?: () => void;
+  signOut?: () => void;
+}) {
   return (
     <div className="app">
-      <header>
-        <Brand />
-      </header>
+      <Navbar signOut={signOut} />
       <main className="onboarding">
         <h1>{error ? "Unable to load" : "Loading…"}</h1>
         <p role={error ? "alert" : "status"} className="lede">
@@ -102,9 +109,15 @@ async function boot() {
       });
     };
     const signIn = () => startAuth("signin");
+    const signOut = () => {
+      void auth
+        .signOut()
+        .catch(() => setError("Sign-out couldn’t finish. Please try again."));
+    };
     if (route.page === "not-found")
       return (
         <AuthStatus
+          signOut={user ? signOut : undefined}
           error="This page doesn’t exist."
           retry={() => navigate("/practice")}
         />
@@ -136,13 +149,7 @@ async function boot() {
             }
           }}
           signIn={signIn}
-          signOut={() => {
-            void auth
-              .signOut()
-              .catch(() =>
-                setError("Sign-out couldn’t finish. Please try again."),
-              );
-          }}
+          signOut={signOut}
         >
           {route.page === "chats" ? (
             <Chats
@@ -152,28 +159,16 @@ async function boot() {
               api={api}
               userId={user.profile.sub}
               signIn={signIn}
-              close={() => navigate("/practice")}
+              signOut={signOut}
             />
           ) : route.page === "reminders" ? (
-            <Reminders
-              api={api}
-              signIn={signIn}
-              close={() => navigate("/practice")}
-            />
+            <Reminders api={api} signIn={signIn} signOut={signOut} />
           ) : (
             <App
-              openReminders={() => navigate("/reminders")}
-              openChats={() => navigate("/chats")}
               api={api}
               userId={user.profile.sub}
               signIn={signIn}
-              signOut={() => {
-                void auth
-                  .signOut()
-                  .catch(() =>
-                    setError("Sign-out couldn’t finish. Please try again."),
-                  );
-              }}
+              signOut={signOut}
             />
           )}
         </Onboarding>

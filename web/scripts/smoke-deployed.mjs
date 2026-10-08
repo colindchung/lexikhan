@@ -34,7 +34,7 @@ try {
     throw new Error("Sign-in return route was lost");
   await page.reload();
   await page.getByText(/Email setup is pending/).waitFor();
-  await page.getByRole("button", { name: "Back to practice" }).click();
+  await page.getByRole("link", { name: "Practice", exact: true }).click();
   await page.getByRole("button", { name: /Start session/ }).click();
   for (const answer of ["السلام علیکم", "شکریہ", "براہ کرم"]) {
     await page.getByLabel(/Your answer/).fill("practice");
@@ -45,13 +45,13 @@ try {
   await page.getByText("Progress saved.").waitFor();
   await page.reload();
   await page.getByText("Progress saved.").waitFor();
-  await page.getByRole("button", { name: "Reminders", exact: true }).click();
+  await page.getByRole("link", { name: "Reminders", exact: true }).click();
   await page.getByText(/Email setup is pending/).waitFor();
   if (!(await page.getByRole("checkbox").isDisabled()))
     throw new Error("Unapproved email must be unavailable");
   await page.getByRole("button", { name: "Save reminders" }).click();
   await page.getByText("Reminders are off.").waitFor();
-  await page.getByRole("button", { name: "Back to practice" }).click();
+  await page.getByRole("link", { name: "Practice", exact: true }).click();
   // Force a refresh on reopening without logging or exporting any token.
   await page.evaluate(() => {
     const key = Object.keys(localStorage).find(
@@ -66,7 +66,7 @@ try {
   await page.close();
   page = await context.newPage();
   await page.goto(url);
-  await page.getByRole("button", { name: "Reminders", exact: true }).waitFor();
+  await page.getByRole("link", { name: "Reminders", exact: true }).waitFor();
   await page.getByRole("button", { name: /Sign out/ }).click();
   await page.getByRole("button", { name: /Sign in/ }).waitFor();
   console.log(

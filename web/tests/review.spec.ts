@@ -245,7 +245,7 @@ test("new learner enrolls in Urdu and sees right-to-left answers", async ({
     page.getByRole("heading", { name: "السلام علیکم" }),
   ).toBeVisible();
   await expect(page.getByLabel("Language & starter deck")).toHaveCount(0);
-  await page.getByRole("button", { name: "Reminders", exact: true }).click();
+  await page.getByRole("link", { name: "Reminders", exact: true }).click();
   await expect(page.getByRole("checkbox")).toBeDisabled();
   await expect(page.getByText(/Email setup is pending/)).toBeVisible();
   await page.screenshot({
@@ -257,7 +257,7 @@ test("new learner enrolls in Urdu and sees right-to-left answers", async ({
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
-  await page.getByRole("button", { name: "Back to practice" }).click();
+  await page.getByRole("link", { name: "Practice", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "السلام علیکم" }),
   ).toBeVisible();
@@ -327,8 +327,15 @@ test("language chats persist and reopen after a reload", async ({ page }) => {
     return route.fulfill({ json: chat ?? { cards: [] } });
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "Language chat" }).click();
+  await page.getByRole("link", { name: "Language chat" }).click();
   await expect(page).toHaveURL("/chats");
+  await expect(
+    page.getByRole("navigation", { name: "Main navigation" }).getByRole("link"),
+  ).toHaveText(["Practice", "Language chat", "Reminders"]);
+  await expect(
+    page.getByRole("link", { name: "Language chat" }),
+  ).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
   await page.getByRole("button", { name: "New chat" }).click();
   await page.getByLabel("Your question").fill("What does acha mean?");
   await page.getByRole("button", { name: "Send question" }).click();
@@ -415,10 +422,10 @@ test("sign-in survives closing a tab, refreshes once across tabs, and signs out 
   const second = await context.newPage();
   await Promise.all([first.goto("/"), second.goto("/")]);
   await expect(
-    first.getByRole("button", { name: "Language chat" }),
+    first.getByRole("link", { name: "Language chat" }),
   ).toBeVisible();
   await expect(
-    second.getByRole("button", { name: "Language chat" }),
+    second.getByRole("link", { name: "Language chat" }),
   ).toBeVisible();
   expect(refreshes).toBe(1);
   await first.getByRole("button", { name: "Sign out" }).click();

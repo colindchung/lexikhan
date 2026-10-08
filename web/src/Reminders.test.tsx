@@ -22,7 +22,7 @@ function setup(available = true) {
       version: body.version + 1,
     })),
   };
-  render(<Reminders api={api} signIn={vi.fn()} close={vi.fn()} />);
+  render(<Reminders api={api} signIn={vi.fn()} signOut={vi.fn()} />);
   return { api, user: userEvent.setup() };
 }
 it("requires an approved number before opt-in", async () => {

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { OnboardingApi, ProfileResponse } from "./api";
 import { ApiError } from "./api";
-import { Brand } from "./App";
+import { Navbar } from "./Navbar";
 
 const languageName = (code: string) =>
   new Intl.DisplayNames(["en"], { type: "language" }).of(code) || code;
@@ -104,12 +104,7 @@ export function Onboarding({
   if (data?.profile) return children;
   return (
     <div className="app">
-      <header>
-        <Brand />
-        <button className="text-button" onClick={signOut} disabled={busy}>
-          Sign out ↗
-        </button>
-      </header>
+      <Navbar signOut={signOut} disabled={busy} />
       <main className="onboarding" aria-busy={busy}>
         <div className="eyebrow">SETUP</div>
         <h1 ref={heading} tabIndex={-1}>

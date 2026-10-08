@@ -31,7 +31,7 @@ function setup(available = true) {
         onSelect={onSelect}
         api={api}
         userId="first"
-        close={vi.fn()}
+        signOut={vi.fn()}
         signIn={vi.fn()}
       />
     );

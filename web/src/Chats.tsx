@@ -1,21 +1,21 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useEffect, useRef, useState } from "react";
-import { Brand } from "./App";
+import { Navbar } from "./Navbar";
 import { ApiError } from "./api";
 import type { ChatApi, ChatDetail, ChatSummary } from "./api";
 
 export function Chats({
   api,
   userId,
-  close,
+  signOut,
   signIn,
   selected,
   onSelect,
 }: {
   api: ChatApi;
   userId: string;
-  close: () => void;
+  signOut: () => void;
   signIn: () => void;
   selected?: string;
   onSelect: (id: string) => void;
@@ -157,12 +157,7 @@ export function Chats({
   }
   return (
     <div className="app chat-app">
-      <header>
-        <Brand />
-        <button className="text-button" onClick={close}>
-          Back to practice
-        </button>
-      </header>
+      <Navbar signOut={signOut} disabled={busy} />
       <div className="chat-layout">
         <aside className="chat-sidebar" aria-label="Saved conversations">
           <div className="eyebrow">YOUR CONVERSATIONS</div>
