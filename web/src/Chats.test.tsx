@@ -43,7 +43,7 @@ it("does not offer paid chat to unapproved accounts", async () => {
   await screen.findByText(/isn’t enabled/);
   expect(screen.getByRole("button", { name: /New chat/ })).toBeDisabled();
 });
-it("sends once and renders a saved answer as text", async () => {
+it("sends once and renders Markdown without executable HTML or links", async () => {
   const { api, user } = setup();
   api.sendMessage.mockResolvedValue({
     ...initial,
@@ -52,7 +52,8 @@ it("sends once and renders a saved answer as text", async () => {
       {
         messageId: "turn",
         text: "acha",
-        answer: "اچھا — acha — good <script>no</script>",
+        answer:
+          "**اچھا** — acha — good\n\n- A casual greeting\n\n[Unsafe](javascript:alert(1))<script>no</script>",
         status: "COMPLETE",
         errorMessage: "",
         createdAt: initial.createdAt,
@@ -69,7 +70,12 @@ it("sends once and renders a saved answer as text", async () => {
   );
   await user.type(await screen.findByLabelText("Your question"), "acha");
   await user.click(screen.getByRole("button", { name: "Send question" }));
-  await screen.findByText("اچھا — acha — good <script>no</script>");
+  await screen.findByText("A casual greeting");
+  expect(screen.getByText("اچھا").tagName).toBe("STRONG");
+  expect(document.querySelector("script")).toBeNull();
+  expect(screen.getByText("Unsafe").getAttribute("href")).not.toMatch(
+    /^javascript:/,
+  );
   expect(api.sendMessage).toHaveBeenCalledTimes(1);
   expect(screen.getByLabelText("Your question")).toHaveValue("");
 });

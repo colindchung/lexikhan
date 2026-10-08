@@ -1,3 +1,5 @@
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useEffect, useRef, useState } from "react";
 import { Brand } from "./App";
 import { ApiError } from "./api";
@@ -27,6 +29,7 @@ export function Chats({
   const newId = useRef<string | undefined>(undefined);
   const composer = useRef<HTMLTextAreaElement>(null);
   const end = useRef<HTMLDivElement>(null);
+  const follow = useRef(true);
   const key = (id: string) => `lexikhan:chat:${userId}:${id}`;
   const failure = (e: unknown) =>
     setError(
@@ -75,7 +78,7 @@ export function Chats({
             );
           }
         }
-        if (result.pending) timer = setTimeout(() => void load(), 2000);
+        if (result.pending) timer = setTimeout(() => void load(), 650);
       } catch (e) {
         if (!cancelled) failure(e);
       }
@@ -88,10 +91,11 @@ export function Chats({
   }, [api, selected, refresh, userId]);
 
   useEffect(() => {
-    end.current?.scrollIntoView?.({ block: "nearest" });
-  }, [chat?.turns.length, chat?.pending]);
+    if (follow.current) end.current?.scrollIntoView?.({ block: "end" });
+  }, [chat]);
 
   function select(id: string) {
+    follow.current = true;
     setSelected(id);
     setChat(undefined);
     setError(undefined);
@@ -120,6 +124,7 @@ export function Chats({
     lock.current = true;
     setBusy(true);
     setError(undefined);
+    follow.current = true;
     const text = draft.trim();
     const saved = sessionStorage.getItem(key(selected) + ":outbox");
     const prior = saved
@@ -191,7 +196,7 @@ export function Chats({
           </nav>
         </aside>
         <main className="chat-main">
-          <div className="eyebrow">A LITTLE MORE UNDERSTANDING</div>
+          <div className="chat-heading-label">Language chat</div>
           <h1>
             {chat?.title && chat.turnCount > 0
               ? chat.title
@@ -242,20 +247,43 @@ export function Chats({
                 className="chat-messages"
                 role="log"
                 aria-label="Conversation"
-                aria-live="polite"
+                aria-live="off"
+                onScroll={(e) => {
+                  const el = e.currentTarget;
+                  follow.current =
+                    el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+                }}
               >
                 {chat.turns.map((turn) => (
                   <div key={turn.messageId}>
                     <article className="chat-message chat-user">
-                      <div className="eyebrow">YOU</div>
+                      <span className="sr-only">You</span>
                       <p dir="auto">{turn.text}</p>
                     </article>
                     {turn.answer && (
                       <article className="chat-message chat-assistant">
-                        <div className="eyebrow">
-                          LEXIKHAN · LANGUAGE HELPER
+                        <div className="chat-speaker">Lexikhan</div>
+                        <div className="chat-markdown">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            skipHtml
+                            components={{
+                              img: () => null,
+                              a: ({ children, href }) => (
+                                <a
+                                  href={href}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  {children}
+                                </a>
+                              ),
+                              p: ({ children }) => <p dir="auto">{children}</p>,
+                            }}
+                          >
+                            {turn.answer}
+                          </ReactMarkdown>
                         </div>
-                        <p dir="auto">{turn.answer}</p>
                       </article>
                     )}
                     {turn.status === "FAILED" && (
@@ -279,7 +307,11 @@ export function Chats({
                 ))}
                 {chat.pending && (
                   <p role="status" className="quiet">
-                    Thinking through your question…
+                    {chat.turns.some(
+                      (t) => t.status === "GENERATING" && t.answer,
+                    )
+                      ? "Writing…"
+                      : "Thinking…"}
                   </p>
                 )}
                 {!chat.turns.length && (
@@ -303,7 +335,7 @@ export function Chats({
                   value={draft}
                   maxLength={2000}
                   placeholder="What does this word mean?"
-                  rows={3}
+                  rows={2}
                   disabled={busy || !available}
                   onChange={(e) => edit(e.target.value)}
                   onKeyDown={(e) => {
@@ -322,12 +354,13 @@ export function Chats({
                     Enter to send · Shift+Enter for a new line
                   </span>
                   <button
+                    aria-label="Send question"
                     className="primary"
                     disabled={
                       busy || chat.pending || !draft.trim() || !available
                     }
                   >
-                    {busy ? "Sending…" : "Send question"}
+                    {busy ? "Sending…" : "Send ↑"}
                   </button>
                 </div>
               </form>

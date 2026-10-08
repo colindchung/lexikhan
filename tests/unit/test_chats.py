@@ -181,29 +181,87 @@ def test_http_routes_require_auth(repository):
     assert json.loads(result["body"])["chatId"] == chat_id
 
 
-def test_provider_request_is_private_bounded_and_parses_text(monkeypatch):
-    response = Mock()
-    response.read.return_value = json.dumps(
-        {
-            "status": "completed",
-            "output": [
-                {
-                    "type": "message",
-                    "content": [{"type": "output_text", "text": "chaabi means key"}],
-                }
-            ],
-        }
-    ).encode()
-    opener = Mock()
-    opener.return_value.__enter__ = Mock(return_value=response)
-    opener.return_value.__exit__ = Mock(return_value=False)
-    monkeypatch.setattr("chat_worker.urlopen", opener)
-    assert (
-        generate([{"role": "user", "content": "چابی"}], "Urdu", "secret")
-        == "chaabi means key"
+def stream_response(monkeypatch, events):
+    from io import BytesIO
+
+    wire = b"".join(
+        ("data: " + json.dumps(event) + "\n\n").encode() for event in events
     )
+    opener = Mock(return_value=BytesIO(wire))
+    monkeypatch.setattr("chat_worker.urlopen", opener)
+    return opener
+
+
+def test_provider_stream_is_private_bounded_and_incremental(monkeypatch):
+    opener = stream_response(
+        monkeypatch,
+        [
+            {"type": "response.output_text.delta", "delta": "**چابی**"},
+            {"type": "response.output_text.delta", "delta": " means key"},
+            {"type": "response.completed"},
+        ],
+    )
+    chunks = []
+    assert (
+        generate([{"role": "user", "content": "چابی"}], "Urdu", "secret", chunks.append)
+        == "**چابی** means key"
+    )
+    assert chunks == ["**چابی**", "**چابی** means key"]
     payload = json.loads(opener.call_args.args[0].data)
-    assert payload["store"] is False
+    assert payload["store"] is False and payload["stream"] is True
     assert payload["max_output_tokens"] == 1000
     assert "Roman Urdu" in payload["instructions"]
     assert opener.call_args.kwargs["timeout"] == 45
+
+
+def test_partial_stream_is_saved_before_completion_and_survives_disconnect(
+    repository, monkeypatch
+):
+    from chat_worker import save_progress
+
+    chat_id = setup(repository)
+    _, payload = submit(repository, chat_id)
+
+    def interrupted(messages, language, key, on_text):
+        on_text("A partial **reply**")
+        live = get_chat(repository, USER, chat_id, NOW)
+        assert live["pending"]
+        assert live["turns"][0]["answer"] == "A partial **reply**"
+        raise TimeoutError()
+
+    monkeypatch.setattr("chat_worker.generate", interrupted)
+    assert (
+        process(repository, payload, NOW, key_loader=lambda: "key")["status"]
+        == "failed"
+    )
+    saved = get_chat(repository, USER, chat_id, NOW)
+    assert not saved["pending"]
+    assert saved["turns"][0]["status"] == "FAILED"
+    assert saved["turns"][0]["answer"] == "A partial **reply**"
+    from botocore.exceptions import ClientError
+
+    with pytest.raises(ClientError):
+        save_progress(
+            repository, USER, f"TURN#{chat_id}#{payload['messageId']}", "late"
+        )
+
+
+@pytest.mark.parametrize("last", [None, {"type": "error"}, {"type": "response.failed"}])
+def test_stream_without_completion_is_not_success(monkeypatch, last):
+    events = [{"type": "response.output_text.delta", "delta": "partial"}]
+    if last:
+        events.append(last)
+    stream_response(monkeypatch, events)
+    with pytest.raises(ValueError):
+        generate([], "Urdu", "key")
+
+
+def test_incomplete_stream_reports_length_limit(monkeypatch):
+    stream_response(
+        monkeypatch,
+        [
+            {"type": "response.refusal.delta", "delta": "Reply"},
+            {"type": "response.incomplete"},
+        ],
+    )
+    assert "length limit" in generate([], "Urdu", "key")

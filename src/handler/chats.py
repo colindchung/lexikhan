@@ -136,10 +136,18 @@ def finish(repository, user_id, chat_id, turn, now, *, answer=None, error=None):
                 repository,
                 user_id,
                 f"TURN#{chat_id}#{turn['messageId']}",
-                "SET #s = :done, answer = :answer, errorMessage = :error",
+                (
+                    "SET #s = :done, answer = "
+                    + (
+                        "if_not_exists(answer, :answer)"
+                        if error and not answer
+                        else ":answer"
+                    )
+                    + ", errorMessage = :error"
+                ),
                 "#s = :queued OR #s = :generating",
                 {
-                    ":done": "COMPLETE" if answer else "FAILED",
+                    ":done": "FAILED" if error else "COMPLETE",
                     ":answer": answer or "",
                     ":error": error or "",
                     ":queued": "QUEUED",

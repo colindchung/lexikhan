@@ -32,7 +32,7 @@ def api_key():
     return key
 
 
-def generate(messages, language, key):
+def generate(messages, language, key, on_text=None):
     instructions = (
         "You are Lexikhan's language helper. Explain definitions, everyday vocabulary, "
         "casual phrases, grammar, pronunciation, register and cultural usage. "
@@ -43,7 +43,9 @@ def generate(messages, language, key):
         "pronunciation and English meaning. Give a natural usage example. "
         "Distinguish literal/idiomatic meanings and informal/polite wording. "
         "Ask for context if ambiguous. Be concise and candid about uncertainty. "
-        "Use readable plain text with short paragraphs, not Markdown tables or HTML. "
+        "Use concise Markdown: short paragraphs, bold key terms, "
+        "and lists when useful. "
+        "Avoid large headings, tables unless requested, and HTML. "
         "You cannot change settings or send reminders. No tools are available."
     )
     payload = json.dumps(
@@ -53,6 +55,7 @@ def generate(messages, language, key):
             "input": messages,
             "max_output_tokens": 1000,
             "store": False,
+            "stream": True,
         }
     ).encode()
     request = Request(
@@ -61,22 +64,57 @@ def generate(messages, language, key):
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
         method="POST",
     )
+    text, completed = "", False
+    started = time.monotonic()
     with urlopen(request, timeout=45) as response:
-        data = json.loads(response.read(1_000_000))
-    text = "\n".join(
-        part.get("text", "")
-        if part.get("type") == "output_text"
-        else part.get("refusal", "")
-        for item in data.get("output", [])
-        if item.get("type") == "message"
-        for part in item.get("content", [])
-        if part.get("type") in {"output_text", "refusal"}
-    ).strip()
-    if not text or data.get("status") not in {"completed", "incomplete"}:
-        raise ValueError("No usable response")
-    if data.get("status") == "incomplete":
-        text += "\n\nThis reply reached its length limit. Ask a follow-up to continue."
-    return text[:10000]
+        # SSE events are UTF-8 JSON data lines, delimited by a blank line.
+        data_lines = []
+        for raw in response:
+            if time.monotonic() - started > 60:
+                raise TimeoutError("Stream exceeded deadline")
+            line = raw.decode("utf-8").rstrip("\r\n")
+            if line.startswith("data:"):
+                data_lines.append(line[5:].lstrip())
+            elif not line and data_lines:
+                data = "\n".join(data_lines)
+                data_lines = []
+                if data == "[DONE]":
+                    break
+                event = json.loads(data)
+                kind = event.get("type")
+                if kind in {"response.output_text.delta", "response.refusal.delta"}:
+                    text += event.get("delta", "")
+                    if len(text) > 10000:
+                        raise ValueError("Stream exceeded length limit")
+                    if on_text:
+                        on_text(text)
+                elif kind in {"response.completed", "response.incomplete"}:
+                    if kind == "response.incomplete":
+                        text += (
+                            "\n\n*This reply reached its length limit. "
+                            "Ask a follow-up to continue.*"
+                        )
+                    completed = True
+                    break
+                elif kind in {"error", "response.failed"}:
+                    raise ValueError("Provider stream failed")
+    if not completed or not text.strip():
+        raise ValueError("Provider stream ended before completion")
+    return text.strip()
+
+
+def save_progress(repository, user_id, turn_key, text):
+    # A delayed stream must never revive an expired or completed turn.
+    repository.client.update_item(
+        TableName=repository.table_name,
+        Key=repository.encode({"userId": user_id, "itemId": turn_key}),
+        UpdateExpression="SET answer = :text",
+        ConditionExpression="#s = :generating",
+        ExpressionAttributeNames={"#s": "status"},
+        ExpressionAttributeValues=repository.encode(
+            {":text": text, ":generating": "GENERATING"}
+        ),
+    )
 
 
 def process(repository, event, now, responder=None, key_loader=None):
@@ -114,6 +152,16 @@ def process(repository, event, now, responder=None, key_loader=None):
             return {"status": "skipped"}
         raise
     answer, error_message = None, None
+    partial, last_write = "", 0.0
+
+    def progress(text):
+        nonlocal partial, last_write
+        partial = text
+        now_tick = time.monotonic()
+        if now_tick - last_write >= 0.5:
+            save_progress(repository, user_id, turn_key, text)
+            last_write = now_tick
+
     try:
         if not approved(repository, user_id):
             raise ValueError("Access revoked")
@@ -139,7 +187,10 @@ def process(repository, event, now, responder=None, key_loader=None):
         language = {"ur": "Urdu", "es": "Spanish"}.get(
             profile.get("learningLanguage"), "Urdu"
         )
-        answer = (responder or generate)(messages, language, key)
+        if responder:
+            answer = responder(messages, language, key)
+        else:
+            answer = generate(messages, language, key, on_text=progress)
     except Exception:
         # Neither keys nor questions, provider errors, or replies belong in logs.
         logger.warning("Chat response unavailable; message content omitted")
@@ -151,12 +202,12 @@ def process(repository, event, now, responder=None, key_loader=None):
             chat_id,
             turn,
             datetime.now(UTC),
-            answer=answer,
+            answer=answer or partial,
             error=error_message,
         )
     except Conflict:
         return {"status": "expired"}
-    return {"status": "complete" if answer else "failed"}
+    return {"status": "failed" if error_message else "complete"}
 
 
 def handler(event, context):

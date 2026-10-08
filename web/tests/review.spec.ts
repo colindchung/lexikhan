@@ -311,13 +311,19 @@ test("language chats persist and reopen after a reload", async ({ page }) => {
           { messageId: body.messageId, text: body.text, status: "QUEUED" },
         ],
       };
-    } else if (chat?.pending && ++polls >= 2) {
+    } else if (chat?.pending && ++polls < 4) {
+      chat.turns[0] = {
+        ...chat.turns[0],
+        status: "GENERATING",
+        answer: "**اچھا** — acha",
+      };
+    } else if (chat?.pending) {
       chat.pending = false;
       chat.turns[0] = {
         ...chat.turns[0],
         status: "COMPLETE",
         answer:
-          "اچھا — acha\nIt means good or okay. You can also use it to acknowledge what someone said.",
+          "**اچھا** — acha\n\nIt means good or okay. You can also use it to acknowledge what someone said.\n\n- **Acha, theek hai** — Okay, that’s fine.\n- **Acha?** — Really? (with a questioning tone)",
       };
     }
     return route.fulfill({ json: chat ?? { cards: [] } });
@@ -327,7 +333,10 @@ test("language chats persist and reopen after a reload", async ({ page }) => {
   await page.getByRole("button", { name: "New chat" }).click();
   await page.getByLabel("Your question").fill("What does acha mean?");
   await page.getByRole("button", { name: "Send question" }).click();
+  await expect(page.locator(".chat-markdown strong")).toHaveText("اچھا");
+  await expect(page.getByText("Writing…")).toBeVisible();
   await expect(page.getByText(/It means good or okay/)).toBeVisible();
+  await expect(page.locator(".chat-markdown li")).toHaveCount(2);
   await page.reload();
   await page.getByRole("button", { name: "Language chat" }).click();
   await page.getByRole("button", { name: /What does acha mean/ }).click();

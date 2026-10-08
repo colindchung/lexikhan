@@ -31,3 +31,17 @@ Access is disabled by default, including for public signups. Enable a confirmed,
 - CloudWatch logs contain generic failure messages, not questions, keys, or provider error bodies. The chat Lambda error alarm covers unhandled failures.
 
 Conversation deletion is not currently exposed. DynamoDB follows the application table’s retention policy. The OpenAI secret is retained when its stack is removed.
+
+## Incremental replies and formatting
+
+The worker requests OpenAI SSE streaming and saves partial text at most twice per
+second. While a turn is pending, the authenticated browser polls its saved chat
+roughly every 650 ms (plus request latency). This delivers incremental output
+through the existing HTTP API and survives page reloads; it is not a persistent
+SSE connection between the browser and API Gateway. A final completion event is
+required for success. If the stream disconnects, partial text remains visible
+with the failed status and is excluded from future model context.
+
+Assistant replies render Markdown with raw HTML disabled, unsafe URL schemes
+filtered, and remote images suppressed. Conversation text is 15 px; the composer
+stays at the bottom of the viewport. Scrolling up pauses automatic following.
