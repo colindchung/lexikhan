@@ -78,15 +78,15 @@ export function Reminders({
         </button>
       </header>
       <main className="onboarding" aria-busy={busy}>
-        <div className="eyebrow">A GENTLE NUDGE</div>
+        <div className="eyebrow">A LITTLE EVERY DAY</div>
         <h1 ref={heading} tabIndex={-1}>
           Make time
           <br />
           <em>to remember.</em>
         </h1>
         <p className="lede">
-          One daily email when cards are ready. A link straight back to your
-          practice.
+          One random everyday word or casual phrase, with its meaning, delivered
+          in your daily email. No repeats.
         </p>
         {error && (
           <div className="notice" role="alert">
@@ -136,7 +136,7 @@ export function Reminders({
                     setSettings({ ...settings, enabled: e.target.checked });
                   }}
                 />{" "}
-                I agree to receive daily Lexikhan practice reminders by email.
+                I agree to receive daily Lexikhan vocabulary emails.
               </label>
               <p className="quiet">
                 Up to one email per day. Turn reminders off here at any time.
@@ -170,8 +170,8 @@ export function Reminders({
                 ))}
               </select>
               <p className="quiet">
-                We check every five minutes around your chosen time. No cards
-                due, no email.
+                We check every five minutes around your chosen time. When you’ve
+                seen every word, emails pause until we add more.
               </p>
               <button className="primary" type="submit">
                 {busy ? "Saving…" : "Save reminders"}

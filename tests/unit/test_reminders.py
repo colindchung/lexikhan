@@ -89,7 +89,7 @@ def test_send_once_and_keep_learning_state_unchanged(repository):
     assert process(repository, ses, settings, NOW, "https://example.com") == "duplicate"
     assert ses.send_email.call_count == 1
     assert (
-        "3 cards"
+        "Your daily Urdu"
         in ses.send_email.call_args.kwargs["Content"]["Simple"]["Body"]["Text"]["Data"]
     )
     assert (
@@ -149,7 +149,7 @@ def test_stale_worker_cannot_send_after_disable(repository):
     ses.send_email.assert_not_called()
 
 
-def test_no_due_cards_skips_message(repository):
+def test_no_due_cards_still_sends_vocabulary(repository):
     settings = prepare(repository)
     for number in range(1, 13):
         LearningService(repository).review(
@@ -163,8 +163,12 @@ def test_no_due_cards_skips_message(repository):
             NOW,
         )
     ses = Mock()
-    assert process(repository, ses, settings, NOW, "https://example.com") == "no_cards"
-    ses.send_email.assert_not_called()
+    ses.get_suppressed_destination.side_effect = ClientError(
+        {"Error": {"Code": "NotFoundException"}}, "GetSuppressedDestination"
+    )
+    ses.send_email.return_value = {"MessageId": "id"}
+    assert process(repository, ses, settings, NOW, "https://example.com") == "accepted"
+    ses.send_email.assert_called_once()
     assert repository.get(USER, "REMINDER")["nextReminderAt"] > timestamp(NOW)
 
 

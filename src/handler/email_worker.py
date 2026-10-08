@@ -15,6 +15,7 @@ from botocore.exceptions import ClientError
 from models import timestamp
 from reminders import next_time
 from repository import Repository
+from vocabulary import choose, email_content
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -62,6 +63,25 @@ def advance(repository, settings, now, attempt=None):
                 },
             ]
         )
+    if attempt:
+        writes.append(
+            {
+                "Put": {
+                    "TableName": repository.table_name,
+                    "Item": repository.encode(
+                        {
+                            "userId": user_id,
+                            "itemId": f"VOCAB#{attempt['vocabulary']['id']}",
+                            "recordType": "VOCABULARY_CLAIM",
+                            "vocabularyId": attempt["vocabulary"]["id"],
+                            "attemptId": attempt["itemId"],
+                            "claimedAt": timestamp(now),
+                        }
+                    ),
+                    "ConditionExpression": "attribute_not_exists(itemId)",
+                }
+            }
+        )
     try:
         repository.client.transact_write_items(TransactItems=writes)
         return True
@@ -101,11 +121,10 @@ def process(repository, ses, settings, now, web_url):
         advance(repository, settings, now)
         return "duplicate"
     profile = repository.get(user_id, "PROFILE")
-    goal = int((profile or {}).get("dailyGoal", 3))
-    cards = repository.session(user_id, timestamp(now), goal, goal)[:goal]
-    if not cards:
+    entry = choose(repository, user_id, (profile or {}).get("learningLanguage", "ur"))
+    if not entry:
         advance(repository, settings, now)
-        return "no_cards"
+        return "vocabulary_exhausted"
     try:
         ses.get_suppressed_destination(EmailAddress=settings["email"])
     except ClientError as error:
@@ -120,7 +139,7 @@ def process(repository, ses, settings, now, web_url):
         "recordType": "EMAIL_ATTEMPT",
         "status": "CLAIMED",
         "attemptedAt": timestamp(now),
-        "cardCount": len(cards),
+        "vocabulary": entry,
     }
     if not advance(repository, settings, now, attempt):
         return "duplicate"
@@ -128,26 +147,7 @@ def process(repository, ses, settings, now, web_url):
         result = ses.send_email(
             FromEmailAddress=os.environ["REMINDER_FROM_EMAIL"],
             Destination={"ToAddresses": [settings["email"]]},
-            Content={
-                "Simple": {
-                    "Subject": {
-                        "Data": "Your Lexikhan practice is ready",
-                        "Charset": "UTF-8",
-                    },
-                    "Body": {
-                        "Text": {
-                            "Data": (
-                                f"Lexikhan: {len(cards)} cards ready, "
-                                f"about {(len(cards) + 2) // 3} min.\n\n"
-                                f"Start practicing: {web_url}/\n\n"
-                                "To stop these daily emails, sign in and turn off "
-                                f"reminders under Reminders: {web_url}/"
-                            ),
-                            "Charset": "UTF-8",
-                        }
-                    },
-                }
-            },
+            Content={"Simple": email_content(entry, web_url)},
         )
         status, message_id = "ACCEPTED", result["MessageId"]
     except Exception:

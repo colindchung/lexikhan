@@ -28,12 +28,22 @@ allowlist remains in force.
 
 Production checks every five minutes. Development scheduling stays disabled.
 At most one attempt per learner per local day is claimed atomically before SES
-is called. No cards ready means no email. More than one hour late means skip that
+is called. Each email contains a random unseen vocabulary item, independent of
+review cards or curriculum progress. More than one hour late means skip that
 day. Timezone/DST handling and optimistic settings versions are preserved.
 Old SMS consent does not enable email: email needs a new opt-in.
 
 `EMAIL_ACCESS` stores the approved recipient; `REMINDER` stores explicit email
 consent, schedule, and recipient; `EMAIL#YYYY-MM-DD` stores the daily attempt.
+`VOCAB#<language>#<stable-id>` permanently records each claimed word in the same
+transaction as the daily attempt and schedule advance. Even ambiguous sends
+consume the word, preventing repeats after retries or timezone changes.
+The initial catalog contains 70 everyday objects, food words, and casual phrases
+per language (Urdu and Spanish), separate from the starter decks. Urdu includes
+script and approximate Roman Urdu pronunciation. Email has plain text and HTML
+with right-to-left Urdu. No paid generation service or new secrets are needed.
+Selection is random without replacement for each account; after exhaustion,
+sends pause until new entries are appended. Never reassign stable catalog IDs.
 A settings change or revoked approval before the claim prevents sending.
 An already claimed message may still arrive after disabling.
 

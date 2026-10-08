@@ -303,9 +303,10 @@ CORS. The original CloudFront URL remains allowed so existing links keep working
 `WebUrl` reports the custom address; `CloudFrontUrl` reports the distribution URL.
 No API custom domain, nameserver change, or Cognito custom domain is required.
 
-## Email reminders
+## Daily vocabulary emails
 
-AWS SES integration, opt-in settings, and a five-minute production reminder
+Daily random vocabulary with permanent per-account deduplication, AWS SES
+integration, opt-in settings, and a five-minute production reminder
 scheduler are implemented. The verified sender is reminders@colindchung.com.
 Sending requires an approved email bound to the learner's verified Cognito
 account. SES remains in its sandbox, so recipients must also be verified in SES.

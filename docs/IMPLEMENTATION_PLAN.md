@@ -356,3 +356,7 @@ verification are implemented. Onboarding and atomic starter-deck enrollment are 
 the default and a configurable timezone and session goal. AWS SES email integration and reminder settings are implemented. The sender domain and personal
 recipient are verified. Next: enable reminders in the app and confirm the first scheduled email.
 See `EMAIL_SETUP.md` for sandbox limits and operations.
+
+Daily emails now teach a random unseen everyday word or casual phrase directly,
+independent of curriculum/review progress. A 70-entry pool per language pauses
+when exhausted; extend it with new stable IDs to continue without repeats.
