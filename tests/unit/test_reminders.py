@@ -4,19 +4,26 @@ from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
+from botocore.exceptions import ClientError
+from email_worker import process, run
 from main import handler
 from models import timestamp
 from onboarding import enroll
 from reminders import next_time, public_settings, save_settings
 from repository import Conflict
 from service import LearningService
-from sms_worker import process, run
 from test_handler import SUB, event
 from test_onboarding import SETTINGS
 
+
+@pytest.fixture(autouse=True)
+def sender(monkeypatch):
+    monkeypatch.setenv("REMINDER_FROM_EMAIL", "reminders@example.test")
+
+
 NOW = datetime(2026, 10, 1, 22, 0, tzinfo=UTC)
 USER = f"USER#{SUB}"
-PHONE = "+14165550123"
+EMAIL = "person@example.test"
 REQUEST = {
     "enabled": True,
     "time": "18:00",
@@ -30,7 +37,7 @@ def prepare(repository):
     repository.client.put_item(
         TableName=repository.table_name,
         Item=repository.encode(
-            {"userId": USER, "itemId": "SMS_ACCESS", "approved": True, "phone": PHONE}
+            {"userId": USER, "itemId": "EMAIL_ACCESS", "approved": True, "email": EMAIL}
         ),
     )
     save_settings(repository, USER, REQUEST, NOW - timedelta(minutes=1))
@@ -52,7 +59,7 @@ def test_preferences_are_scoped_validated_idempotent_and_disable(repository):
     )
     assert not result["enabled"] and result["nextReminderAt"] is None
     assert "reminderGroup" not in repository.get(USER, "REMINDER")
-    assert public_settings(repository, "USER#other")["phone"] is None
+    assert public_settings(repository, "USER#other")["email"] is None
 
 
 @pytest.mark.parametrize(
@@ -62,7 +69,7 @@ def test_preferences_are_scoped_validated_idempotent_and_disable(repository):
         {"version": True},
         {"time": "25:00"},
         {"timezone": "wrong"},
-        {"phone": PHONE},
+        {"email": EMAIL},
     ],
 )
 def test_settings_reject_invalid_inputs(repository, changes):
@@ -73,53 +80,73 @@ def test_settings_reject_invalid_inputs(repository, changes):
 def test_send_once_and_keep_learning_state_unchanged(repository):
     settings = prepare(repository)
     before = repository.get(USER, "CARD#ur-en-v1-01")
-    sns = Mock()
-    sns.check_if_phone_number_is_opted_out.return_value = {"isOptedOut": False}
-    sns.publish.return_value = {"MessageId": "provider-id"}
-    assert process(repository, sns, settings, NOW, "https://example.com") == "accepted"
-    assert process(repository, sns, settings, NOW, "https://example.com") == "duplicate"
-    assert sns.publish.call_count == 1
-    assert "3 cards" in sns.publish.call_args.kwargs["Message"]
-    assert "https://example.com/" in sns.publish.call_args.kwargs["Message"]
-    assert repository.get(USER, "SMS#2026-10-01")["status"] == "ACCEPTED"
+    ses = Mock()
+    ses.get_suppressed_destination.side_effect = ClientError(
+        {"Error": {"Code": "NotFoundException"}}, "GetSuppressedDestination"
+    )
+    ses.send_email.return_value = {"MessageId": "provider-id"}
+    assert process(repository, ses, settings, NOW, "https://example.com") == "accepted"
+    assert process(repository, ses, settings, NOW, "https://example.com") == "duplicate"
+    assert ses.send_email.call_count == 1
+    assert (
+        "3 cards"
+        in ses.send_email.call_args.kwargs["Content"]["Simple"]["Body"]["Text"]["Data"]
+    )
+    assert (
+        "https://example.com/"
+        in ses.send_email.call_args.kwargs["Content"]["Simple"]["Body"]["Text"]["Data"]
+    )
+    assert (
+        ses.send_email.call_args.kwargs["FromEmailAddress"] == "reminders@example.test"
+    )
+    assert ses.send_email.call_args.kwargs["Destination"] == {"ToAddresses": [EMAIL]}
+    assert repository.get(USER, "EMAIL#2026-10-01")["status"] == "ACCEPTED"
     assert repository.get(USER, "CARD#ur-en-v1-01") == before
 
 
 def test_ambiguous_send_never_retries(repository):
     settings = prepare(repository)
-    sns = Mock()
-    sns.check_if_phone_number_is_opted_out.return_value = {"isOptedOut": False}
-    sns.publish.side_effect = TimeoutError("phone should not be logged")
+    ses = Mock()
+    ses.get_suppressed_destination.side_effect = ClientError(
+        {"Error": {"Code": "NotFoundException"}}, "GetSuppressedDestination"
+    )
+    ses.send_email.side_effect = TimeoutError("email should not be logged")
     with pytest.raises(RuntimeError):
-        process(repository, sns, settings, NOW, "https://example.com")
-    assert repository.get(USER, "SMS#2026-10-01")["status"] == "UNKNOWN"
-    assert process(repository, sns, settings, NOW, "https://example.com") == "duplicate"
-    assert sns.publish.call_count == 1
+        process(repository, ses, settings, NOW, "https://example.com")
+    assert repository.get(USER, "EMAIL#2026-10-01")["status"] == "UNKNOWN"
+    assert process(repository, ses, settings, NOW, "https://example.com") == "duplicate"
+    assert ses.send_email.call_count == 1
 
 
 def test_opt_out_and_revocation_prevent_send(repository):
     settings = prepare(repository)
-    sns = Mock()
-    sns.check_if_phone_number_is_opted_out.return_value = {"isOptedOut": True}
-    assert process(repository, sns, settings, NOW, "https://example.com") == "opted_out"
-    sns.publish.assert_not_called()
+    ses = Mock()
+    ses.get_suppressed_destination.return_value = {
+        "SuppressedDestination": {"Reason": "BOUNCE"}
+    }
+    assert (
+        process(repository, ses, settings, NOW, "https://example.com") == "suppressed"
+    )
+    ses.send_email.assert_not_called()
     repository.client.delete_item(
         TableName=repository.table_name,
-        Key=repository.encode({"userId": USER, "itemId": "SMS_ACCESS"}),
+        Key=repository.encode({"userId": USER, "itemId": "EMAIL_ACCESS"}),
     )
     assert (
-        process(repository, sns, settings, NOW, "https://example.com") == "unapproved"
+        process(repository, ses, settings, NOW, "https://example.com") == "unapproved"
     )
-    sns.publish.assert_not_called()
+    ses.send_email.assert_not_called()
 
 
 def test_stale_worker_cannot_send_after_disable(repository):
     stale = prepare(repository)
     save_settings(repository, USER, {**REQUEST, "enabled": False, "version": 1}, NOW)
-    sns = Mock()
-    sns.check_if_phone_number_is_opted_out.return_value = {"isOptedOut": False}
-    assert process(repository, sns, stale, NOW, "https://example.com") == "duplicate"
-    sns.publish.assert_not_called()
+    ses = Mock()
+    ses.get_suppressed_destination.side_effect = ClientError(
+        {"Error": {"Code": "NotFoundException"}}, "GetSuppressedDestination"
+    )
+    assert process(repository, ses, stale, NOW, "https://example.com") == "duplicate"
+    ses.send_email.assert_not_called()
 
 
 def test_no_due_cards_skips_message(repository):
@@ -135,19 +162,21 @@ def test_no_due_cards_skips_message(repository):
             },
             NOW,
         )
-    sns = Mock()
-    assert process(repository, sns, settings, NOW, "https://example.com") == "no_cards"
-    sns.publish.assert_not_called()
+    ses = Mock()
+    assert process(repository, ses, settings, NOW, "https://example.com") == "no_cards"
+    ses.send_email.assert_not_called()
     assert repository.get(USER, "REMINDER")["nextReminderAt"] > timestamp(NOW)
 
 
 def test_run_queries_sparse_index_and_rechecks_settings(repository):
     prepare(repository)
-    sns = Mock()
-    sns.check_if_phone_number_is_opted_out.return_value = {"isOptedOut": False}
-    sns.publish.return_value = {"MessageId": "id"}
-    assert run(repository, sns, NOW, "https://example.com") == {"accepted": 1}
-    assert run(repository, sns, NOW, "https://example.com") == {"accepted": 0}
+    ses = Mock()
+    ses.get_suppressed_destination.side_effect = ClientError(
+        {"Error": {"Code": "NotFoundException"}}, "GetSuppressedDestination"
+    )
+    ses.send_email.return_value = {"MessageId": "id"}
+    assert run(repository, ses, NOW, "https://example.com") == {"accepted": 1}
+    assert run(repository, ses, NOW, "https://example.com") == {"accepted": 0}
 
 
 def test_dst_gap_and_fold():
@@ -172,7 +201,7 @@ def test_api_requires_auth_and_persists_settings(repository):
         del request["requestContext"]["authorizer"]
         assert handler(request, None)["statusCode"] == 401
     response = handler(event(path="/reminders"), None)
-    assert json.loads(response["body"])["phone"] == PHONE
+    assert json.loads(response["body"])["email"] == EMAIL
     response = handler(
         event(
             "POST",
@@ -187,28 +216,55 @@ def test_api_requires_auth_and_persists_settings(repository):
 
 def test_outage_does_not_send_hours_late(repository):
     settings = prepare(repository)
-    sns = Mock()
+    ses = Mock()
     assert (
         process(
-            repository, sns, settings, NOW + timedelta(hours=2), "https://example.com"
+            repository, ses, settings, NOW + timedelta(hours=2), "https://example.com"
         )
         == "expired"
     )
-    sns.publish.assert_not_called()
+    ses.send_email.assert_not_called()
 
 
 def test_retry_after_database_failure_does_not_publish_twice(repository, monkeypatch):
     settings = prepare(repository)
-    sns = Mock()
-    sns.check_if_phone_number_is_opted_out.return_value = {"isOptedOut": False}
-    sns.publish.return_value = {"MessageId": "id"}
+    ses = Mock()
+    ses.get_suppressed_destination.side_effect = ClientError(
+        {"Error": {"Code": "NotFoundException"}}, "GetSuppressedDestination"
+    )
+    ses.send_email.return_value = {"MessageId": "id"}
     monkeypatch.setattr(
         repository.client,
         "update_item",
         Mock(side_effect=RuntimeError("database down")),
     )
     with pytest.raises(RuntimeError):
-        process(repository, sns, settings, NOW, "https://example.com")
-    assert repository.get(USER, "SMS#2026-10-01")["status"] == "CLAIMED"
-    assert process(repository, sns, settings, NOW, "https://example.com") == "duplicate"
-    assert sns.publish.call_count == 1
+        process(repository, ses, settings, NOW, "https://example.com")
+    assert repository.get(USER, "EMAIL#2026-10-01")["status"] == "CLAIMED"
+    assert process(repository, ses, settings, NOW, "https://example.com") == "duplicate"
+    assert ses.send_email.call_count == 1
+
+
+def test_legacy_sms_consent_does_not_enable_email(repository):
+    settings = prepare(repository)
+    settings.pop("channel")
+    repository.client.put_item(
+        TableName=repository.table_name, Item=repository.encode(settings)
+    )
+    assert not public_settings(repository, USER)["enabled"]
+    ses = Mock()
+    assert process(repository, ses, settings, NOW, "https://example.com") == "skipped"
+    ses.send_email.assert_not_called()
+    result = save_settings(repository, USER, {**REQUEST, "version": 1}, NOW)
+    assert result["enabled"]
+
+
+def test_suppression_lookup_failure_does_not_send(repository):
+    settings = prepare(repository)
+    ses = Mock()
+    ses.get_suppressed_destination.side_effect = ClientError(
+        {"Error": {"Code": "AccessDeniedException"}}, "GetSuppressedDestination"
+    )
+    with pytest.raises(ClientError):
+        process(repository, ses, settings, NOW, "https://example.com")
+    ses.send_email.assert_not_called()

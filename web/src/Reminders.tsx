@@ -85,7 +85,7 @@ export function Reminders({
           <em>to remember.</em>
         </h1>
         <p className="lede">
-          One daily text when cards are ready. A link straight back to your
+          One daily email when cards are ready. A link straight back to your
           practice.
         </p>
         {error && (
@@ -114,17 +114,18 @@ export function Reminders({
           <form onSubmit={(e) => void save(e)}>
             {!settings.available && (
               <p className="notice">
-                SMS setup is pending for your account. Your phone number needs
-                to be verified and connected before you can enable reminders.
+                Email setup is pending for your account. Your email address
+                needs to be verified and connected before you can enable
+                reminders.
               </p>
             )}
-            {settings.phone && (
+            {settings.email && (
               <p>
-                Send to <strong>{settings.phone}</strong>
+                Send to <strong>{settings.email}</strong>
               </p>
             )}
             <fieldset disabled={busy}>
-              <legend className="sr-only">SMS reminder settings</legend>
+              <legend className="sr-only">Email reminder settings</legend>
               <label className="consent">
                 <input
                   type="checkbox"
@@ -135,13 +136,12 @@ export function Reminders({
                     setSettings({ ...settings, enabled: e.target.checked });
                   }}
                 />{" "}
-                I agree to receive daily Lexikhan practice reminders by SMS.
+                I agree to receive daily Lexikhan practice reminders by email.
               </label>
               <p className="quiet">
-                Up to one message per day. Message and data rates may apply.
-                Reply STOP or turn reminders off here. Saving with reminders off
-                stops future sends; a message already being sent may still
-                arrive.
+                Up to one email per day. Turn reminders off here at any time.
+                Saving with reminders off stops future sends; a message already
+                being sent may still arrive.
               </p>
               <label htmlFor="reminder-time">Preferred time</label>
               <input
@@ -171,7 +171,7 @@ export function Reminders({
               </select>
               <p className="quiet">
                 We check every five minutes around your chosen time. No cards
-                due, no text.
+                due, no email.
               </p>
               <button className="primary" type="submit">
                 {busy ? "Saving…" : "Save reminders"}

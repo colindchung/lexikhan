@@ -1,3 +1,5 @@
+> Historical SMS setup. The deployed app now uses SES email reminders. See [Email setup](EMAIL_SETUP.md). The SMS worker and approval helper have been replaced.
+
 # AWS SMS setup
 
 Lexikhan sends transactional reminders through Amazon SNS in **us-east-2**.

@@ -286,13 +286,13 @@ def test_custom_domain_requires_a_certificate():
         )
 
 
-def test_sms_worker_is_isolated_and_has_failure_destination():
+def test_email_worker_is_isolated_and_has_failure_destination():
     template = synthesize_template()
     functions = template.find_resources("AWS::Lambda::Function")
     reminder_id = next(
         k
         for k, v in functions.items()
-        if v["Properties"]["Handler"] == "sms_worker.handler"
+        if v["Properties"]["Handler"] == "email_worker.handler"
     )
     template.has_resource_properties(
         "AWS::Scheduler::Schedule",
@@ -323,6 +323,27 @@ def test_sms_worker_is_isolated_and_has_failure_destination():
         template.has_resource_properties(
             "AWS::ApiGatewayV2::Route", {"RouteKey": route, "AuthorizationType": "JWT"}
         )
+    template.has_resource_properties(
+        "AWS::IAM::Policy",
+        {
+            "PolicyDocument": {
+                "Statement": Match.array_with(
+                    [
+                        {
+                            "Action": "ses:SendEmail",
+                            "Effect": "Allow",
+                            "Resource": Match.any_value(),
+                            "Condition": {
+                                "StringEquals": {
+                                    "ses:FromAddress": "reminders@colindchung.com"
+                                }
+                            },
+                        }
+                    ]
+                )
+            }
+        },
+    )
     api_role = next(
         v["Properties"]["Role"]["Fn::GetAtt"][0]
         for v in functions.values()
@@ -331,7 +352,7 @@ def test_sms_worker_is_isolated_and_has_failure_destination():
     for policy in template.find_resources("AWS::IAM::Policy").values():
         props = policy["Properties"]
         if {"Ref": api_role} in props["Roles"]:
-            assert "sns:Publish" not in str(props["PolicyDocument"])
+            assert "ses:SendEmail" not in str(props["PolicyDocument"])
 
 
 def test_production_reminders_run_every_five_minutes():
@@ -339,7 +360,7 @@ def test_production_reminders_run_every_five_minutes():
 
     app = App()
     stack = ApplicationStack(
-        app, "ProdSmsTest", stage_name="prod", config=STAGE_CONFIG["prod"]
+        app, "ProdEmailTest", stage_name="prod", config=STAGE_CONFIG["prod"]
     )
     Template.from_stack(stack).has_resource_properties(
         "AWS::Scheduler::Schedule",

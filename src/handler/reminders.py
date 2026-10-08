@@ -26,10 +26,12 @@ def next_time(now, zone, clock):
 def public_settings(repository, user_id):
     settings = repository.get(user_id, "REMINDER")
     profile = repository.get(user_id, "PROFILE")
-    access = repository.get(user_id, "SMS_ACCESS")
+    access = repository.get(user_id, "EMAIL_ACCESS")
     return {
-        "enabled": bool(settings and settings["enabled"]),
-        "phone": access["phone"] if access and access.get("approved") else None,
+        "enabled": bool(
+            settings and settings["enabled"] and settings.get("channel") == "email"
+        ),
+        "email": access["email"] if access and access.get("approved") else None,
         "available": bool(access and access.get("approved")),
         "time": settings["time"] if settings else "18:00",
         "timezone": settings["timezone"]
@@ -66,15 +68,16 @@ def save_settings(repository, user_id, request, now):
         raise ValueError("Choose an IANA timezone") from None
     if not repository.get(user_id, "PROFILE"):
         raise NotFound("Complete onboarding first")
-    access = repository.get(user_id, "SMS_ACCESS")
+    access = repository.get(user_id, "EMAIL_ACCESS")
     if request["enabled"] and not (access and access.get("approved")):
         raise ValueError(
-            "A verified SMS number must be approved for this account first"
+            "A verified email address must be approved for this account first"
         )
     current = repository.get(user_id, "REMINDER")
     # A lost HTTP response may be retried with the same previous version.
     if (
         current
+        and current.get("channel") == "email"
         and int(current["version"]) == request["version"] + 1
         and all(current[k] == request[k] for k in ("enabled", "time", "timezone"))
     ):
@@ -83,13 +86,14 @@ def save_settings(repository, user_id, request, now):
         "userId": user_id,
         "itemId": "REMINDER",
         "recordType": "REMINDER",
+        "channel": "email",
         **request,
         "version": request["version"] + 1,
         "updatedAt": timestamp(now),
     }
     if request["enabled"]:
         item.update(
-            phone=access["phone"],
+            email=access["email"],
             consentAt=timestamp(now),
             reminderGroup="ENABLED",
             nextReminderAt=next_time(now, request["timezone"], request["time"]),
@@ -113,11 +117,11 @@ def save_settings(repository, user_id, request, now):
                 "ConditionCheck": {
                     "TableName": repository.table_name,
                     "Key": repository.encode(
-                        {"userId": user_id, "itemId": "SMS_ACCESS"}
+                        {"userId": user_id, "itemId": "EMAIL_ACCESS"}
                     ),
-                    "ConditionExpression": "approved = :yes AND phone = :phone",
+                    "ConditionExpression": "approved = :yes AND email = :email",
                     "ExpressionAttributeValues": repository.encode(
-                        {":yes": True, ":phone": access["phone"]}
+                        {":yes": True, ":email": access["email"]}
                     ),
                 }
             }

@@ -1,7 +1,7 @@
-"""Scheduled-only SMS worker. Claims each day's send before contacting SNS.
+"""Scheduled-only email worker. Claims each day's send before contacting SES.
 
-SNS has no idempotent Publish API. Ambiguous sends are never automatically retried:
-we prefer a missed reminder to duplicate texts, and record UNKNOWN for operators.
+SES has no idempotent SendEmail API. Ambiguous sends are never automatically retried:
+we prefer a missed reminder to duplicate emails, and record UNKNOWN for operators.
 """
 
 import logging
@@ -52,11 +52,11 @@ def advance(repository, settings, now, attempt=None):
                     "ConditionCheck": {
                         "TableName": repository.table_name,
                         "Key": repository.encode(
-                            {"userId": user_id, "itemId": "SMS_ACCESS"}
+                            {"userId": user_id, "itemId": "EMAIL_ACCESS"}
                         ),
-                        "ConditionExpression": "approved = :yes AND phone = :phone",
+                        "ConditionExpression": "approved = :yes AND email = :email",
                         "ExpressionAttributeValues": repository.encode(
-                            {":yes": True, ":phone": settings["phone"]}
+                            {":yes": True, ":email": settings["email"]}
                         ),
                     }
                 },
@@ -74,10 +74,12 @@ def advance(repository, settings, now, attempt=None):
         raise
 
 
-def process(repository, sns, settings, now, web_url):
+def process(repository, ses, settings, now, web_url):
     user_id = settings["userId"]
-    if not settings.get("enabled") or settings.get("nextReminderAt", "z") > timestamp(
-        now
+    if (
+        settings.get("channel") != "email"
+        or not settings.get("enabled")
+        or settings.get("nextReminderAt", "z") > timestamp(now)
     ):
         return "skipped"
     if (
@@ -85,16 +87,16 @@ def process(repository, sns, settings, now, web_url):
     ).total_seconds() > 3600:
         advance(repository, settings, now)
         return "expired"
-    access = repository.get(user_id, "SMS_ACCESS")
+    access = repository.get(user_id, "EMAIL_ACCESS")
     if (
         not access
         or not access.get("approved")
-        or access.get("phone") != settings.get("phone")
+        or access.get("email") != settings.get("email")
     ):
         advance(repository, settings, now)
         return "unapproved"
     day = now.astimezone(ZoneInfo(settings["timezone"])).date().isoformat()
-    attempt_id = f"SMS#{day}"
+    attempt_id = f"EMAIL#{day}"
     if repository.get(user_id, attempt_id):
         advance(repository, settings, now)
         return "duplicate"
@@ -104,15 +106,18 @@ def process(repository, sns, settings, now, web_url):
     if not cards:
         advance(repository, settings, now)
         return "no_cards"
-    if sns.check_if_phone_number_is_opted_out(phoneNumber=settings["phone"])[
-        "isOptedOut"
-    ]:
+    try:
+        ses.get_suppressed_destination(EmailAddress=settings["email"])
+    except ClientError as error:
+        if error.response["Error"]["Code"] != "NotFoundException":
+            raise
+    else:
         advance(repository, settings, now)
-        return "opted_out"
+        return "suppressed"
     attempt = {
         "userId": user_id,
         "itemId": attempt_id,
-        "recordType": "SMS_ATTEMPT",
+        "recordType": "EMAIL_ATTEMPT",
         "status": "CLAIMED",
         "attemptedAt": timestamp(now),
         "cardCount": len(cards),
@@ -120,23 +125,33 @@ def process(repository, sns, settings, now, web_url):
     if not advance(repository, settings, now, attempt):
         return "duplicate"
     try:
-        result = sns.publish(
-            PhoneNumber=settings["phone"],
-            Message=(
-                f"Lexikhan: {len(cards)} cards ready, "
-                f"about {(len(cards) + 2) // 3} min. "
-                f"{web_url}/\nReply STOP to opt out."
-            ),
-            MessageAttributes={
-                "AWS.SNS.SMS.SMSType": {
-                    "DataType": "String",
-                    "StringValue": "Transactional",
+        result = ses.send_email(
+            FromEmailAddress=os.environ["REMINDER_FROM_EMAIL"],
+            Destination={"ToAddresses": [settings["email"]]},
+            Content={
+                "Simple": {
+                    "Subject": {
+                        "Data": "Your Lexikhan practice is ready",
+                        "Charset": "UTF-8",
+                    },
+                    "Body": {
+                        "Text": {
+                            "Data": (
+                                f"Lexikhan: {len(cards)} cards ready, "
+                                f"about {(len(cards) + 2) // 3} min.\n\n"
+                                f"Start practicing: {web_url}/\n\n"
+                                "To stop these daily emails, sign in and turn off "
+                                f"reminders under Reminders: {web_url}/"
+                            ),
+                            "Charset": "UTF-8",
+                        }
+                    },
                 }
             },
         )
         status, message_id = "ACCEPTED", result["MessageId"]
     except Exception:
-        # Do not log provider exceptions, which can contain recipient phone numbers.
+        # Do not log provider exceptions, which can contain recipient email addresses.
         status, message_id = "UNKNOWN", ""
     repository.client.update_item(
         TableName=repository.table_name,
@@ -147,12 +162,12 @@ def process(repository, sns, settings, now, web_url):
     )
     if status == "UNKNOWN":
         raise RuntimeError(
-            "SMS provider acceptance unknown; automatic resend suppressed"
+            "EMAIL provider acceptance unknown; automatic resend suppressed"
         )
     return "accepted"
 
 
-def run(repository, sns, now, web_url, context=None):
+def run(repository, ses, now, web_url, context=None):
     cursor = {}
     failed = False
     count = 0
@@ -177,12 +192,12 @@ def run(repository, sns, now, web_url, context=None):
             if not settings:
                 continue
             try:
-                outcome = process(repository, sns, settings, now, web_url)
+                outcome = process(repository, ses, settings, now, web_url)
                 logger.info("reminder outcome=%s", outcome)
                 count += outcome == "accepted"
             except Exception:
                 logger.error(
-                    "Reminder failed; inspect SMS_ATTEMPT records; recipient omitted"
+                    "Reminder failed; inspect EMAIL_ATTEMPT records; recipient omitted"
                 )
                 failed = True
         if "LastEvaluatedKey" not in page:
@@ -197,11 +212,11 @@ def handler(event, context):
     if event.get("source") != "lexikhan.reminders":
         raise ValueError("Scheduled invocation required")
     repository = Repository(boto3.client("dynamodb"), os.environ["HISTORY_TABLE_NAME"])
-    # Disable SDK Publish retries: a timeout can occur after a provider accepts an SMS.
-    sns = boto3.client(
-        "sns",
+    # No SDK retries: a timeout can happen after SES accepts an email.
+    ses = boto3.client(
+        "sesv2",
         config=Config(
             retries={"total_max_attempts": 1}, connect_timeout=3, read_timeout=5
         ),
     )
-    return run(repository, sns, datetime.now(UTC), os.environ["WEB_URL"], context)
+    return run(repository, ses, datetime.now(UTC), os.environ["WEB_URL"], context)

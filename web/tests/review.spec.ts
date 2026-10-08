@@ -151,7 +151,7 @@ test("new learner enrolls in Urdu and sees right-to-left answers", async ({
         json: {
           enabled: false,
           available: false,
-          phone: null,
+          email: null,
           time: "18:00",
           timezone: "America/Toronto",
           version: 0,
@@ -208,7 +208,7 @@ test("new learner enrolls in Urdu and sees right-to-left answers", async ({
   await expect(page.getByLabel("Language & starter deck")).toHaveCount(0);
   await page.getByRole("button", { name: "Reminders", exact: true }).click();
   await expect(page.getByRole("checkbox")).toBeDisabled();
-  await expect(page.getByText(/SMS setup is pending/)).toBeVisible();
+  await expect(page.getByText(/Email setup is pending/)).toBeVisible();
   await page.screenshot({
     path: `test-results/reminders-${test.info().project.name}.png`,
     fullPage: true,

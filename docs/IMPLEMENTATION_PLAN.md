@@ -39,7 +39,7 @@ Resolve these before creating production learning content:
 5. Whether answers are initially self-graded or evaluated automatically.
 
 Recommended defaults are a curated starter deck of phrases, self-grading, three
-new cards per day, and one daily SMS reminder in the learner's timezone.
+new cards per day, and one daily email reminder in the learner's timezone.
 
 ## Target user experience
 
@@ -96,7 +96,7 @@ EventBridge Scheduler     |
   |                       v
   +------------------> due cards
   |
-  +--> SMS provider
+  +--> SES email provider
 ```
 
 Selected frontend: a React and TypeScript progressive web app built with Vite
@@ -247,7 +247,7 @@ reminder opportunity in their timezone. The scheduled operation should:
 
 1. Query whether at least one card is due.
 2. Do nothing when no cards are due.
-3. Send one SMS containing the due count, estimated duration, and a link
+3. Send one email containing the due count, estimated duration, and a link
    to the web session.
 4. Record the reminder timestamp to prevent duplicate messages on retries.
 
@@ -309,7 +309,7 @@ desktop browser.
 
 ### Phase 5: Add reminders
 
-- Configure the SMS provider, sender, and personal recipient.
+- Configure the SES email provider, sender, and personal recipient.
 - Configure a daily timezone-aware schedule.
 - Send a reminder only when reviews are due.
 - Include a direct HTTPS link to start the session.
@@ -353,5 +353,6 @@ Production data must never be used by automated tests.
 
 The backend, Cognito, Vite UI, CloudFront hosting, and deployed development
 verification are implemented. Onboarding and atomic starter-deck enrollment are implemented, with Urdu as
-the default and a configurable timezone and session goal. AWS SNS integration and reminder settings are implemented. Next: complete the
-Canadian sender and destination setup in `SMS_SETUP.md`, then verify a real text.
+the default and a configurable timezone and session goal. AWS SES email integration and reminder settings are implemented. The sender domain and personal
+recipient are verified. Next: enable reminders in the app and confirm the first scheduled email.
+See `EMAIL_SETUP.md` for sandbox limits and operations.

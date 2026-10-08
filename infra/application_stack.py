@@ -248,7 +248,7 @@ class ApplicationStack(Stack):
             function_name=f"lexikhan-reminders-{stage_name}",
             runtime=lambda_.Runtime.PYTHON_3_12,
             architecture=lambda_.Architecture.ARM_64,
-            handler="sms_worker.handler",
+            handler="email_worker.handler",
             code=lambda_.Code.from_asset("build/handler"),
             timeout=Duration.seconds(60),
             memory_size=256,
@@ -256,6 +256,7 @@ class ApplicationStack(Stack):
             environment={
                 "HISTORY_TABLE_NAME": history_table.table_name,
                 "WEB_URL": hosting.url,
+                "REMINDER_FROM_EMAIL": "reminders@colindchung.com",
             },
             log_group=logs.LogGroup(
                 self, "ReminderLogs", retention=logs.RetentionDays.ONE_MONTH
@@ -267,18 +268,22 @@ class ApplicationStack(Stack):
         history_table.grant_read_write_data(reminder_worker)
         reminder_worker.add_to_role_policy(
             iam.PolicyStatement(
-                actions=["sns:Publish", "sns:CheckIfPhoneNumberIsOptedOut"],
-                resources=["*"],
+                actions=["ses:SendEmail"],
+                resources=[
+                    self.format_arn(
+                        service="ses",
+                        resource="identity",
+                        resource_name="colindchung.com",
+                    )
+                ],
+                conditions={
+                    "StringEquals": {"ses:FromAddress": "reminders@colindchung.com"}
+                },
             )
         )
         reminder_worker.add_to_role_policy(
             iam.PolicyStatement(
-                actions=[
-                    "sms-voice:SendTextMessage",
-                    "sms-voice:DescribeOptedOutNumbers",
-                ],
-                resources=["*"],
-                conditions={"StringEquals": {"aws:CalledViaLast": "sns.amazonaws.com"}},
+                actions=["ses:GetSuppressedDestination"], resources=["*"]
             )
         )
         cloudwatch.Alarm(

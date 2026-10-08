@@ -33,9 +33,9 @@ try {
   await page.reload();
   await page.getByText("Your progress is saved. Let it settle in.").waitFor();
   await page.getByRole("button", { name: "Reminders", exact: true }).click();
-  await page.getByText(/SMS setup is pending/).waitFor();
+  await page.getByText(/Email setup is pending/).waitFor();
   if (!(await page.getByRole("checkbox").isDisabled()))
-    throw new Error("Unapproved SMS must be unavailable");
+    throw new Error("Unapproved email must be unavailable");
   await page.getByRole("button", { name: "Save reminders" }).click();
   await page.getByText("Reminders are off.").waitFor();
   await page.getByRole("button", { name: "Back to practice" }).click();

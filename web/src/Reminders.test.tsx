@@ -8,7 +8,7 @@ function setup(available = true) {
   const initial = {
     enabled: false,
     available,
-    phone: available ? "+14165550123" : null,
+    email: available ? "person@example.test" : null,
     time: "18:00",
     timezone: "America/Toronto",
     version: 0,
@@ -28,7 +28,7 @@ function setup(available = true) {
 it("requires an approved number before opt-in", async () => {
   const { api } = setup(false);
   expect(await screen.findByRole("checkbox")).toBeDisabled();
-  expect(screen.getByText(/SMS setup is pending/)).toBeVisible();
+  expect(screen.getByText(/Email setup is pending/)).toBeVisible();
   expect(api.saveReminders).not.toHaveBeenCalled();
 });
 it("saves explicit consent and can turn reminders off", async () => {

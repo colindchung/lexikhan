@@ -59,7 +59,7 @@ export interface ReminderInput {
   version: number;
 }
 export interface ReminderSettings extends ReminderInput {
-  phone: string | null;
+  email: string | null;
   available: boolean;
   nextReminderAt: string | null;
 }

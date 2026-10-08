@@ -133,7 +133,7 @@ exposed, and migrate the workflow to OIDC when convenient.
 - `infra/application_stack.py`: deployable infrastructure unit.
 - `infra/config.py`: non-secret stage configuration.
 - `src/handler/main.py`: authenticated HTTP API adapter.
-- `src/handler/sms_worker.py`: scheduled AWS SNS reminder worker.
+- `src/handler/email_worker.py`: scheduled AWS SES reminder worker.
 - `src/handler/service.py`: shared business logic.
 - `tests/unit`: Lambda behavior tests.
 - `tests/infrastructure`: synthesized-template assertions.
@@ -164,8 +164,8 @@ token as the review API. The profile and versioned starter cards are created in
 one conditional DynamoDB transaction. Identical retries return the saved profile;
 changed settings return 409. Existing cards and review progress are preserved.
 During the first minute after enrollment, sessions use strongly consistent reads
-so starter cards are available before the due index catches up. Profile editing is not implemented yet. SMS reminder settings are available
-from **Reminders** after onboarding; see [AWS SMS setup](docs/SMS_SETUP.md).
+so starter cards are available before the due index catches up. Profile editing is not implemented yet. Email reminder settings are available
+from **Reminders** after onboarding; see [AWS email setup](docs/EMAIL_SETUP.md).
 
 **Existing IAM-keyed data:** it is retained but is not automatically assigned to
 a Cognito account. Any existing cards/reviews under `USER#<IAM ARN>` need an
@@ -303,10 +303,11 @@ CORS. The original CloudFront URL remains allowed so existing links keep working
 `WebUrl` reports the custom address; `CloudFrontUrl` reports the distribution URL.
 No API custom domain, nameserver change, or Cognito custom domain is required.
 
-## SMS reminders
+## Email reminders
 
-AWS SNS integration, opt-in settings, and a five-minute production reminder
-scheduler are implemented. Sending requires a verified destination approved for
-the learner and an AWS origination number. No new API secrets are required.
-See [setup and delivery semantics](docs/SMS_SETUP.md) for Canadian sender setup,
-phone verification, duplicate prevention, and operational limits.
+AWS SES integration, opt-in settings, and a five-minute production reminder
+scheduler are implemented. The verified sender is reminders@colindchung.com.
+Sending requires an approved email bound to the learner's verified Cognito
+account. SES remains in its sandbox, so recipients must also be verified in SES.
+No new API secrets or phone registration are required.
+See [setup and delivery semantics](docs/EMAIL_SETUP.md).
