@@ -697,3 +697,23 @@ textarea::placeholder {
   outline: 3px solid #688640;
   outline-offset: 4px;
 }
+
+.auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 28px;
+}
+.auth-secondary {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-height: 48px;
+  padding: 12px 20px;
+  color: var(--green);
+  background: #fffdf7;
+  font-weight: 600;
+}
+.auth-actions + .quiet {
+  max-width: 420px;
+  line-height: 1.6;
+}

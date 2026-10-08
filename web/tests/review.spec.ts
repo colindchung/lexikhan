@@ -28,6 +28,47 @@ test("welcome begins authorization-code sign-in with PKCE", async ({
   expect(url.searchParams.get("code_challenge")).toBeTruthy();
   expect(url.searchParams.get("state")).toBeTruthy();
 });
+test("signup opens directly with a fresh PKCE request", async ({ page }) => {
+  await page.route("https://auth.example.test/**", (route) =>
+    route.fulfill({
+      body: "<h1>Create your account</h1>",
+      contentType: "text/html",
+    }),
+  );
+  await page.goto("/");
+  await page.getByRole("button", { name: "Create your account" }).click();
+  await expect(page).toHaveURL(/auth.example.test\/signup\?/);
+  const url = new URL(page.url());
+  expect(url.searchParams.get("response_type")).toBe("code");
+  expect(url.searchParams.get("code_challenge_method")).toBe("S256");
+  expect(url.searchParams.get("code_challenge")).toBeTruthy();
+  expect(url.searchParams.get("state")).toBeTruthy();
+});
+test("invalid callback gives a recovery path and clears sensitive URL parameters", async ({
+  page,
+}) => {
+  await page.goto("/auth/callback?code=invalid&state=missing");
+  await expect(page.getByRole("alert")).toContainText("Start again");
+  await expect(page).toHaveURL("/");
+  await page.getByRole("button", { name: "Try again" }).click();
+  await expect(
+    page.getByRole("button", { name: "Create your account" }),
+  ).toBeVisible();
+});
+test("configuration failure provides a working retry", async ({ page }) => {
+  await page.route("**/config.json", (route) =>
+    route.fulfill({ status: 503, body: "Unavailable" }),
+  );
+  await page.goto("/");
+  await expect(page.getByRole("alert")).toContainText("Check your connection");
+  await page.route("**/config.json", (route) =>
+    route.fulfill({ json: config }),
+  );
+  await page.getByRole("button", { name: "Try again" }).click();
+  await expect(
+    page.getByRole("button", { name: "Create your account" }),
+  ).toBeVisible();
+});
 test("review flow is keyboard accessible, retries safely, and fits the screen", async ({
   page,
 }) => {

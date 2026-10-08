@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { App, Welcome } from "./App";
+import { App, Brand, Welcome } from "./App";
 import { Reminders } from "./Reminders";
 import { Onboarding } from "./Onboarding";
 import { createApi } from "./api";
@@ -12,12 +12,48 @@ import "@fontsource/libre-caslon-display/latin-400.css";
 import "./style.css";
 
 const root = createRoot(document.getElementById("root")!);
+function AuthStatus({ error, retry }: { error?: string; retry?: () => void }) {
+  return (
+    <div className="app">
+      <header>
+        <Brand />
+      </header>
+      <main className="onboarding">
+        <div className="eyebrow">A LITTLE, EVERY DAY</div>
+        <h1>{error ? "Let’s try that again." : "Opening your space…"}</h1>
+        <p role={error ? "alert" : "status"} className="lede">
+          {error ?? "Just a moment while we get you settled in."}
+        </p>
+        {retry && (
+          <button className="primary" onClick={retry}>
+            Try again
+          </button>
+        )}
+        {error && (
+          <p>
+            <a href="/">Back to Lexikhan</a>
+          </p>
+        )}
+      </main>
+    </div>
+  );
+}
+root.render(<AuthStatus />);
 async function boot() {
   const config = await loadConfig();
   const auth = createAuth(config);
   if (location.pathname === "/auth/callback") {
     try {
       await auth.manager.signinRedirectCallback();
+    } catch {
+      history.replaceState({}, "", "/");
+      root.render(
+        <AuthStatus
+          error="Your sign-in link expired or could not be completed. Start again to sign in securely."
+          retry={() => location.assign("/")}
+        />,
+      );
+      return;
     } finally {
       history.replaceState({}, "", "/");
     }
@@ -28,11 +64,30 @@ async function boot() {
   function Experience() {
     const [showReminders, setShowReminders] = useState(false);
     const [error, setError] = useState<string>();
-    const signIn = () => {
-      void auth
-        .signIn()
-        .catch(() => setError("Sign-in couldn’t start. Please try again."));
+    const [pending, setPending] = useState<"signin" | "signup">();
+    const starting = useRef(false);
+    useEffect(() => {
+      const reset = () => {
+        starting.current = false;
+        setPending(undefined);
+      };
+      window.addEventListener("pageshow", reset);
+      return () => window.removeEventListener("pageshow", reset);
+    }, []);
+    const startAuth = (mode: "signin" | "signup") => {
+      if (starting.current) return;
+      starting.current = true;
+      setPending(mode);
+      setError(undefined);
+      void (mode === "signup" ? auth.signUp() : auth.signIn()).catch(() => {
+        starting.current = false;
+        setPending(undefined);
+        setError(
+          "We couldn’t open sign-in. Check your connection and try again.",
+        );
+      });
     };
+    const signIn = () => startAuth("signin");
     return user ? (
       <>
         {error && (
@@ -76,7 +131,12 @@ async function boot() {
         </Onboarding>
       </>
     ) : (
-      <Welcome signIn={signIn} error={error} />
+      <Welcome
+        signIn={signIn}
+        signUp={() => startAuth("signup")}
+        pending={pending}
+        error={error}
+      />
     );
   }
   root.render(<Experience />);
@@ -87,9 +147,9 @@ async function boot() {
 }
 void boot().catch(() =>
   root.render(
-    <Welcome
-      signIn={() => location.assign("/")}
+    <AuthStatus
       error="We couldn’t open your space. Check your connection, then try again."
+      retry={() => location.reload()}
     />,
   ),
 );

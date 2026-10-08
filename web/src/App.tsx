@@ -63,9 +63,13 @@ export function Brand() {
 }
 export function Welcome({
   signIn,
+  signUp,
+  pending,
   error,
 }: {
   signIn: () => void;
+  signUp?: () => void;
+  pending?: "signin" | "signup";
   error?: string;
 }) {
   return (
@@ -93,10 +97,26 @@ export function Welcome({
             {error}
           </p>
         )}
-        <button className="primary" onClick={signIn}>
-          Sign in to your space <span aria-hidden="true">↗</span>
-        </button>
-        <p className="quiet">A calm place to learn, one card at a time.</p>
+        <div className="auth-actions" aria-busy={!!pending}>
+          {signUp && (
+            <button className="primary" onClick={signUp} disabled={!!pending}>
+              {pending === "signup" ? "Opening signup…" : "Create your account"}
+            </button>
+          )}
+          <button
+            className={signUp ? "auth-secondary" : "primary"}
+            onClick={signIn}
+            disabled={!!pending}
+          >
+            {pending === "signin"
+              ? "Opening sign-in…"
+              : "Sign in to your space"}
+          </button>
+        </div>
+        <p className="quiet">
+          New here? Use your email to create an account. We’ll send a
+          verification code.
+        </p>
         <div className="welcome-card" aria-hidden="true">
           <span className="eyebrow">THE ART OF REMEMBERING</span>
           <p>

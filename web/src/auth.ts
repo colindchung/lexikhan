@@ -8,7 +8,10 @@ export interface Config {
   authDomain: string;
 }
 export async function loadConfig(): Promise<Config> {
-  const response = await fetch("/config.json", { cache: "no-store" });
+  const response = await fetch("/config.json", {
+    cache: "no-store",
+    signal: AbortSignal.timeout(15000),
+  });
   if (!response.ok)
     throw new Error("The app is being prepared. Please refresh in a moment.");
   const config = (await response.json()) as Config;
@@ -25,7 +28,7 @@ export async function loadConfig(): Promise<Config> {
   return config;
 }
 export function createAuth(config: Config) {
-  const manager = new UserManager({
+  const settings = {
     authority: config.authority,
     client_id: config.clientId,
     redirect_uri: `${location.origin}/auth/callback`,
@@ -42,10 +45,20 @@ export function createAuth(config: Config) {
       token_endpoint: `${config.authDomain}/oauth2/token`,
       jwks_uri: `${config.authority}/.well-known/jwks.json`,
     },
-  });
+  };
+  const manager = new UserManager(settings);
   return {
     manager,
     signIn: () => manager.signinRedirect(),
+    signUp: () =>
+      new UserManager({
+        ...settings,
+        automaticSilentRenew: false,
+        metadata: {
+          ...settings.metadata,
+          authorization_endpoint: `${config.authDomain}/signup`,
+        },
+      }).signinRedirect(),
     async token() {
       let user = await manager.getUser();
       if (user?.expired) {
