@@ -10,6 +10,7 @@ from decimal import Decimal
 from uuid import UUID
 
 import boto3
+import chats
 from botocore.exceptions import ClientError
 from models import timestamp
 from onboarding import catalog, enroll, public_profile
@@ -89,13 +90,29 @@ def handler(event: dict, context) -> dict:
         if route[0] == "GET"
         else None
     )
-    if not answer_route and route not in (
-        ("GET", "/session"),
-        ("POST", "/reviews"),
-        ("GET", "/profile"),
-        ("GET", "/reminders"),
-        ("POST", "/reminders"),
-        ("POST", "/onboarding"),
+    chat_route = re.fullmatch(r"/chats/([^/]+)(/messages)?", route[1] or "")
+    chat_allowed = (
+        route in (("GET", "/chats"), ("POST", "/chats"))
+        or chat_route
+        and (
+            route[0] == "GET"
+            and not chat_route.group(2)
+            or route[0] == "POST"
+            and chat_route.group(2)
+        )
+    )
+    if (
+        not chat_allowed
+        and not answer_route
+        and route
+        not in (
+            ("GET", "/session"),
+            ("POST", "/reviews"),
+            ("GET", "/profile"),
+            ("GET", "/reminders"),
+            ("POST", "/reminders"),
+            ("POST", "/onboarding"),
+        )
     ):
         return _response(404, {"error": {"code": "not_found", "message": "Not found"}})
     claims = (
@@ -124,7 +141,24 @@ def handler(event: dict, context) -> dict:
             boto3.client("dynamodb"), os.environ["HISTORY_TABLE_NAME"]
         )
         now = datetime.now(UTC)
-        if route == ("GET", "/reminders"):
+        if route == ("GET", "/chats"):
+            result = chats.list_chats(repository, f"USER#{user_id}")
+        elif route == ("POST", "/chats"):
+            result = chats.create_chat(repository, f"USER#{user_id}", _body(event), now)
+        elif chat_allowed and chat_route:
+            if route[0] == "GET":
+                result = chats.get_chat(
+                    repository, f"USER#{user_id}", chat_route.group(1), now
+                )
+            else:
+                result = chats.send(
+                    repository,
+                    f"USER#{user_id}",
+                    chat_route.group(1),
+                    _body(event),
+                    now,
+                )
+        elif route == ("GET", "/reminders"):
             result = public_settings(repository, f"USER#{user_id}")
         elif route == ("POST", "/reminders"):
             result = save_settings(repository, f"USER#{user_id}", _body(event), now)

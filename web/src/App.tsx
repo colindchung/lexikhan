@@ -141,12 +141,14 @@ export function App({
   signIn,
   signOut,
   openReminders,
+  openChats,
 }: {
   api: LearningApi;
   userId: string;
   signIn: () => void;
   signOut: () => void;
   openReminders?: () => void;
+  openChats?: () => void;
 }) {
   const key = `lexikhan:session:${userId}`;
   const [progress, setProgress] = useState<Progress>(
@@ -258,6 +260,11 @@ export function App({
               disabled={busy}
             >
               Reminders
+            </button>
+          )}
+          {openChats && (
+            <button className="text-button" onClick={openChats} disabled={busy}>
+              Language chat
             </button>
           )}
           <button className="text-button" onClick={signOut} disabled={busy}>

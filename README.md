@@ -312,3 +312,11 @@ Sending requires an approved email bound to the learner's verified Cognito
 account. SES remains in its sandbox, so recipients must also be verified in SES.
 No new API secrets or phone registration are required.
 See [setup and delivery semantics](docs/EMAIL_SETUP.md).
+
+## Language chat
+
+Saved, account-private conversations help explain definitions, everyday phrases,
+and pronunciation. Urdu replies include Roman Urdu and English meanings. Paid
+access requires explicit account approval; the OpenAI key is held in AWS Secrets
+Manager and read only by the background worker. See [chat setup](docs/CHAT_SETUP.md)
+for activation, context limits, and failure behavior.

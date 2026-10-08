@@ -33,6 +33,7 @@ from aws_cdk import (
 from aws_cdk import (
     aws_scheduler as scheduler,
 )
+from aws_cdk import aws_secretsmanager as secretsmanager
 from aws_cdk import (
     aws_sqs as sqs,
 )
@@ -134,6 +135,56 @@ class ApplicationStack(Stack):
         )
         history_table.grant_read_write_data(worker)
 
+        chat_secret = secretsmanager.CfnSecret(
+            self,
+            "OpenAIKey",
+            name=f"lexikhan/{stage_name}/openai",
+            description="OpenAI API key for language chat; JSON api_key field",
+        )
+        chat_secret.apply_removal_policy(RemovalPolicy.RETAIN)
+        chat_worker = lambda_.Function(
+            self,
+            "ChatWorker",
+            function_name=f"lexikhan-chat-{stage_name}",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            architecture=lambda_.Architecture.ARM_64,
+            handler="chat_worker.handler",
+            code=lambda_.Code.from_asset("build/handler"),
+            timeout=Duration.seconds(90),
+            memory_size=256,
+            reserved_concurrent_executions=2,
+            retry_attempts=0,
+            max_event_age=Duration.minutes(1),
+            log_group=logs.LogGroup(
+                self, "ChatLogs", retention=logs.RetentionDays.ONE_MONTH
+            ),
+            environment={
+                "HISTORY_TABLE_NAME": history_table.table_name,
+                "OPENAI_SECRET_ARN": chat_secret.ref,
+                "OPENAI_MODEL": "gpt-4.1-mini",
+            },
+        )
+        history_table.grant_read_write_data(chat_worker)
+        chat_worker.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["secretsmanager:GetSecretValue"],
+                resources=[chat_secret.ref],
+            )
+        )
+        chat_worker.grant_invoke(worker)
+        worker.add_environment("CHAT_FUNCTION_NAME", chat_worker.function_name)
+        cloudwatch.Alarm(
+            self,
+            "ChatErrorsAlarm",
+            alarm_name=f"lexikhan-chat-errors-{stage_name}",
+            metric=chat_worker.metric_errors(period=Duration.minutes(5)),
+            evaluation_periods=1,
+            threshold=1,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+        )
+        CfnOutput(self, "OpenAISecretName", value=f"lexikhan/{stage_name}/openai")
+        CfnOutput(self, "ChatFunctionName", value=chat_worker.function_name)
+
         hosting = WebHosting(
             self,
             "Web",
@@ -233,6 +284,10 @@ class ApplicationStack(Stack):
             integration=integration,
         )
         for path, method in (
+            ("/chats", apigwv2.HttpMethod.GET),
+            ("/chats", apigwv2.HttpMethod.POST),
+            ("/chats/{chatId}", apigwv2.HttpMethod.GET),
+            ("/chats/{chatId}/messages", apigwv2.HttpMethod.POST),
             ("/profile", apigwv2.HttpMethod.GET),
             ("/reminders", apigwv2.HttpMethod.GET),
             ("/reminders", apigwv2.HttpMethod.POST),

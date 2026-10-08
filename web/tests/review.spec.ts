@@ -264,3 +264,81 @@ test("new learner enrolls in Urdu and sees right-to-left answers", async ({
     page.getByRole("heading", { name: "السلام علیکم" }),
   ).toBeVisible();
 });
+
+test("language chats persist and reopen after a reload", async ({ page }) => {
+  await page.addInitScript(({ authority, clientId }) => {
+    sessionStorage.setItem(
+      `oidc.user:${authority}:${clientId}`,
+      JSON.stringify({
+        access_token: "test-access",
+        token_type: "Bearer",
+        scope: "openid email aws.cognito.signin.user.admin",
+        profile: { sub: "test-user" },
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+      }),
+    );
+  }, config);
+  let chat: any;
+  let polls = 0;
+  await page.route("https://api.example.test/**", (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/session") return route.fulfill({ json: { cards: [] } });
+    if (path === "/profile")
+      return route.fulfill({
+        json: { profile: { deckId: "ur-en-v1" }, decks: [] },
+      });
+    if (path === "/chats" && route.request().method() === "GET")
+      return route.fulfill({
+        json: { available: true, chats: chat ? [chat] : [] },
+      });
+    if (path === "/chats") {
+      chat = {
+        chatId: route.request().postDataJSON().chatId,
+        title: "New chat",
+        turnCount: 0,
+        updatedAt: new Date().toISOString(),
+        pending: false,
+        turns: [],
+      };
+    } else if (path.endsWith("/messages")) {
+      const body = route.request().postDataJSON();
+      chat = {
+        ...chat,
+        title: body.text,
+        turnCount: 1,
+        pending: true,
+        turns: [
+          { messageId: body.messageId, text: body.text, status: "QUEUED" },
+        ],
+      };
+    } else if (chat?.pending && ++polls >= 2) {
+      chat.pending = false;
+      chat.turns[0] = {
+        ...chat.turns[0],
+        status: "COMPLETE",
+        answer:
+          "اچھا — acha\nIt means good or okay. You can also use it to acknowledge what someone said.",
+      };
+    }
+    return route.fulfill({ json: chat ?? { cards: [] } });
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Language chat" }).click();
+  await page.getByRole("button", { name: "New chat" }).click();
+  await page.getByLabel("Your question").fill("What does acha mean?");
+  await page.getByRole("button", { name: "Send question" }).click();
+  await expect(page.getByText(/It means good or okay/)).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "Language chat" }).click();
+  await page.getByRole("button", { name: /What does acha mean/ }).click();
+  await expect(page.getByText(/It means good or okay/)).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: `test-results/chat-${test.info().project.name}.png`,
+    fullPage: true,
+  });
+});

@@ -72,6 +72,35 @@ export interface LearningApi {
   answer(cardId: string): Promise<Answer>;
   review(request: Review): Promise<ReviewResult>;
 }
+export interface ChatSummary {
+  chatId: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  turnCount: number;
+}
+export interface ChatTurn {
+  messageId: string;
+  text: string;
+  answer: string;
+  status: "QUEUED" | "GENERATING" | "COMPLETE" | "FAILED";
+  errorMessage: string;
+  createdAt: string;
+}
+export interface ChatDetail extends ChatSummary {
+  pending: boolean;
+  turns: ChatTurn[];
+}
+export interface ChatApi {
+  chats(): Promise<{ chats: ChatSummary[]; available: boolean }>;
+  createChat(chatId: string): Promise<ChatSummary>;
+  chat(chatId: string): Promise<ChatDetail>;
+  sendMessage(
+    chatId: string,
+    messageId: string,
+    text: string,
+  ): Promise<ChatDetail>;
+}
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -83,10 +112,15 @@ export class ApiError extends Error {
 export function createApi(
   base: string,
   token: () => Promise<string>,
-): LearningApi & OnboardingApi & ReminderApi {
+): LearningApi & OnboardingApi & ReminderApi & ChatApi {
   async function request<T>(
     path: string,
-    body?: Review | ProfileSettings | ReminderInput,
+    body?:
+      | Review
+      | ProfileSettings
+      | ReminderInput
+      | { chatId: string }
+      | { messageId: string; text: string },
   ): Promise<T> {
     let response: Response;
     try {
@@ -109,6 +143,13 @@ export function createApi(
       );
     }
     if (!response.ok) {
+      if (path.startsWith("/chats") && response.status !== 401) {
+        const detail = await response.json().catch(() => null);
+        throw new ApiError(
+          response.status,
+          detail?.error?.message ?? "Chat is unavailable. Please try again.",
+        );
+      }
       throw new ApiError(
         response.status,
         response.status === 401
@@ -121,6 +162,14 @@ export function createApi(
     return response.json() as Promise<T>;
   }
   return {
+    chats: () => request("/chats"),
+    createChat: (chatId) => request("/chats", { chatId }),
+    chat: (chatId) => request(`/chats/${encodeURIComponent(chatId)}`),
+    sendMessage: (chatId, messageId, text) =>
+      request(`/chats/${encodeURIComponent(chatId)}/messages`, {
+        messageId,
+        text,
+      }),
     reminders: () => request("/reminders"),
     saveReminders: (body) => request("/reminders", body),
     profile: () => request("/profile"),

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { App, Brand, Welcome } from "./App";
+import { Chats } from "./Chats";
 import { Reminders } from "./Reminders";
 import { Onboarding } from "./Onboarding";
 import { createApi } from "./api";
@@ -62,7 +63,9 @@ async function boot() {
   const user = await auth.manager.getUser();
   const api = createApi(config.apiUrl, auth.token);
   function Experience() {
-    const [showReminders, setShowReminders] = useState(false);
+    const [view, setView] = useState<"practice" | "reminders" | "chats">(
+      "practice",
+    );
     const [error, setError] = useState<string>();
     const [pending, setPending] = useState<"signin" | "signup">();
     const starting = useRef(false);
@@ -107,15 +110,23 @@ async function boot() {
               );
           }}
         >
-          {showReminders ? (
+          {view === "chats" ? (
+            <Chats
+              api={api}
+              userId={user.profile.sub}
+              signIn={signIn}
+              close={() => setView("practice")}
+            />
+          ) : view === "reminders" ? (
             <Reminders
               api={api}
               signIn={signIn}
-              close={() => setShowReminders(false)}
+              close={() => setView("practice")}
             />
           ) : (
             <App
-              openReminders={() => setShowReminders(true)}
+              openReminders={() => setView("reminders")}
+              openChats={() => setView("chats")}
               api={api}
               userId={user.profile.sub}
               signIn={signIn}

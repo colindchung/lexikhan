@@ -84,6 +84,9 @@ def run(session, stack_name, *, browser=False):
         )["AuthenticationResult"]
         token = tokens["AccessToken"]
         assert http(api, "/health")[0] == 200
+        assert http(api, "/chats")[0] == 401
+        assert http(api, "/chats", token) == (200, {"chats": [], "available": False})
+        assert http(api, "/chats", token, {"chatId": str(uuid4())})[0] == 400
         assert http(api, "/session")[0] == 401
         assert http(api, "/reviews", body={})[0] == 401
         assert http(api, "/session", "invalid-token")[0] == 401

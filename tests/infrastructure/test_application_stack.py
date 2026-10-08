@@ -25,12 +25,12 @@ def synthesize_template(
 def test_stack_contains_worker_api_and_schedule():
     template = synthesize_template()
 
-    template.resource_count_is("AWS::Lambda::Function", 2)
+    template.resource_count_is("AWS::Lambda::Function", 3)
     template.resource_count_is("AWS::ApiGatewayV2::Api", 1)
-    template.resource_count_is("AWS::ApiGatewayV2::Route", 8)
+    template.resource_count_is("AWS::ApiGatewayV2::Route", 12)
     template.resource_count_is("AWS::Scheduler::Schedule", 1)
     template.resource_count_is("AWS::SQS::Queue", 1)
-    template.resource_count_is("AWS::CloudWatch::Alarm", 3)
+    template.resource_count_is("AWS::CloudWatch::Alarm", 4)
     template.resource_count_is("AWS::DynamoDB::Table", 1)
     template.has_resource_properties(
         "AWS::DynamoDB::Table",
@@ -366,3 +366,31 @@ def test_production_reminders_run_every_five_minutes():
         "AWS::Scheduler::Schedule",
         {"ScheduleExpression": "rate(5 minutes)", "State": "ENABLED"},
     )
+
+
+def test_chat_worker_alone_can_read_key_and_routes_are_authenticated():
+    template = synthesize_template()
+    functions = template.find_resources("AWS::Lambda::Function")
+    chat_role = next(
+        v["Properties"]["Role"]["Fn::GetAtt"][0]
+        for v in functions.values()
+        if v["Properties"]["Handler"] == "chat_worker.handler"
+    )
+    for policy in template.find_resources("AWS::IAM::Policy").values():
+        props = policy["Properties"]
+        if "secretsmanager:GetSecretValue" in str(props["PolicyDocument"]):
+            assert {"Ref": chat_role} in props["Roles"]
+            statements = props["PolicyDocument"]["Statement"]
+            for statement in statements:
+                if "secretsmanager:GetSecretValue" in str(statement["Action"]):
+                    assert statement["Resource"] != "*"
+    for route in (
+        "GET /chats",
+        "POST /chats",
+        "GET /chats/{chatId}",
+        "POST /chats/{chatId}/messages",
+    ):
+        template.has_resource_properties(
+            "AWS::ApiGatewayV2::Route", {"RouteKey": route, "AuthorizationType": "JWT"}
+        )
+    template.resource_count_is("AWS::SecretsManager::Secret", 1)
