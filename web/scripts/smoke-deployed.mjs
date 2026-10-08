@@ -6,7 +6,10 @@ for await (const chunk of process.stdin) input += chunk;
 const { url, username, password } = JSON.parse(input);
 const browser = await chromium.launch();
 try {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+  });
+  let page = await context.newPage();
   page.setDefaultTimeout(30000);
   await page.goto(url);
   await page.getByRole("button", { name: /Sign in to your space/ }).click();
@@ -39,10 +42,25 @@ try {
   await page.getByRole("button", { name: "Save reminders" }).click();
   await page.getByText("Reminders are off.").waitFor();
   await page.getByRole("button", { name: "Back to practice" }).click();
+  // Force a refresh on reopening without logging or exporting any token.
+  await page.evaluate(() => {
+    const key = Object.keys(localStorage).find(
+      (key) => key.startsWith("oidc.user:") && !key.endsWith(":logout"),
+    );
+    if (!key) throw new Error("Persistent session missing");
+    const user = JSON.parse(localStorage.getItem(key));
+    if (!user.refresh_token) throw new Error("Refresh token missing");
+    user.expires_at = 0;
+    localStorage.setItem(key, JSON.stringify(user));
+  });
+  await page.close();
+  page = await context.newPage();
+  await page.goto(url);
+  await page.getByRole("button", { name: "Reminders", exact: true }).waitFor();
   await page.getByRole("button", { name: /Sign out/ }).click();
   await page.getByRole("button", { name: /Sign in to your space/ }).waitFor();
   console.log(
-    "PASS: CloudFront → hosted Cognito PKCE sign-in → Urdu onboarding → Lambda review → completion → reload → sign-out",
+    "PASS: CloudFront → hosted Cognito PKCE sign-in → Urdu onboarding → Lambda review → completion → reload → close/reopen → token renewal → sign-out",
   );
 } finally {
   await browser.close();

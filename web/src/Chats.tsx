@@ -19,9 +19,16 @@ export function Chats({
   const [list, setList] = useState<ChatSummary[]>([]);
   const [available, setAvailable] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const [selected, setSelected] = useState<string>();
+  const selectionKey = `lexikhan:chat-selected:${userId}`;
+  const [selected, setSelected] = useState<string | undefined>(
+    () => localStorage.getItem(selectionKey) ?? undefined,
+  );
   const [chat, setChat] = useState<ChatDetail>();
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(() =>
+    selected
+      ? (sessionStorage.getItem(`lexikhan:chat:${userId}:${selected}`) ?? "")
+      : "",
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError>();
   const [refresh, setRefresh] = useState(0);
@@ -96,6 +103,7 @@ export function Chats({
 
   function select(id: string) {
     follow.current = true;
+    localStorage.setItem(selectionKey, id);
     setSelected(id);
     setChat(undefined);
     setError(undefined);

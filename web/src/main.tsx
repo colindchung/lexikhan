@@ -60,11 +60,28 @@ async function boot() {
     }
   }
   await auth.manager.clearStaleState();
-  const user = await auth.manager.getUser();
+  const initialUser = await auth.restore();
   const api = createApi(config.apiUrl, auth.token);
   function Experience() {
-    const [view, setView] = useState<"practice" | "reminders" | "chats">(
-      "practice",
+    const [user, setUser] = useState(initialUser);
+    const viewKey = `lexikhan:view:${user?.profile.sub ?? "guest"}`;
+    const [view, setView] = useState<"practice" | "reminders" | "chats">(() => {
+      const saved = localStorage.getItem(viewKey);
+      return saved === "chats" || saved === "reminders" ? saved : "practice";
+    });
+    useEffect(() => {
+      localStorage.setItem(viewKey, view);
+    }, [viewKey, view]);
+    useEffect(
+      () =>
+        auth.subscribe(() => {
+          void auth.manager.getUser().then((next) => {
+            if (next && next.profile.sub !== user?.profile.sub)
+              location.reload();
+            else setUser(next);
+          });
+        }),
+      [user?.profile.sub],
     );
     const [error, setError] = useState<string>();
     const [pending, setPending] = useState<"signin" | "signup">();

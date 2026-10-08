@@ -320,3 +320,17 @@ and pronunciation. Urdu replies include Roman Urdu and English meanings. Paid
 access requires explicit account approval; the OpenAI key is held in AWS Secrets
 Manager and read only by the background worker. See [chat setup](docs/CHAT_SETUP.md)
 for activation, context limits, and failure behavior.
+
+## Persistent sign-in
+
+The frontend stores its Cognito session in localStorage, while PKCE redirect
+state stays in sessionStorage. Existing tab sessions migrate automatically.
+Refresh tokens retain their configured 30-day lifetime. The app renews before
+loading data, near token expiry, and on focus/reconnection. Temporary renewal
+failures preserve the session; invalid refresh tokens require sign-in again.
+Web Locks serialize refreshes across supported browsers' tabs, and storage events
+synchronize sign-out. Browsers without Web Locks still coalesce within each tab.
+The selected page and conversation are remembered per account. Clearing browser
+storage or using private browsing can prevent persistence. Tokens remain readable
+by same-origin JavaScript; a backend HttpOnly-cookie session would be a separate
+architecture upgrade.

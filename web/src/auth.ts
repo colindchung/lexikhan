@@ -34,9 +34,9 @@ export function createAuth(config: Config) {
     redirect_uri: `${location.origin}/auth/callback`,
     response_type: "code",
     scope: "openid email aws.cognito.signin.user.admin",
-    automaticSilentRenew: true,
+    automaticSilentRenew: false,
     loadUserInfo: false,
-    userStore: new WebStorageStateStore({ store: sessionStorage }),
+    userStore: new WebStorageStateStore({ store: localStorage }),
     stateStore: new WebStorageStateStore({ store: sessionStorage }),
     // Cognito uses /logout rather than OIDC's end-session endpoint.
     metadata: {
@@ -46,7 +46,65 @@ export function createAuth(config: Config) {
       jwks_uri: `${config.authority}/.well-known/jwks.json`,
     },
   };
+  const storageKey = `oidc.user:${config.authority}:${config.clientId}`;
+  const epochKey = `${storageKey}:logout`;
+  // Keep an existing tab signed in when upgrading from session-only storage.
+  const legacy = sessionStorage.getItem(storageKey);
+  if (
+    legacy &&
+    !localStorage.getItem(storageKey) &&
+    !localStorage.getItem(epochKey)
+  ) {
+    localStorage.setItem(storageKey, legacy);
+  }
+  sessionStorage.removeItem(storageKey);
   const manager = new UserManager(settings);
+  let renewing:
+    Promise<Awaited<ReturnType<typeof manager.getUser>>> | undefined;
+  const listeners = new Set<() => void>();
+  const notify = () => listeners.forEach((listener) => listener());
+  const locked = <T>(action: () => Promise<T>): Promise<T> =>
+    navigator.locks ? navigator.locks.request(storageKey, action) : action();
+
+  async function restore() {
+    if (renewing) return renewing;
+    renewing = locked(async () => {
+      let user = await manager.getUser();
+      if (!user) return null;
+      if (!user.expired && (user.expires_in ?? 0) > 60) return user;
+      if (!user.refresh_token) {
+        await manager.removeUser();
+        notify();
+        return null;
+      }
+      const epoch = localStorage.getItem(epochKey);
+      try {
+        user = await manager.signinSilent();
+        if (epoch !== localStorage.getItem(epochKey)) {
+          await manager.removeUser();
+          return null;
+        }
+        notify();
+        return user;
+      } catch (error) {
+        const code = (error as { error?: string })?.error;
+        if (code === "invalid_grant" || code === "login_required") {
+          await manager.removeUser();
+          notify();
+          return null;
+        }
+        // Offline, timeout, and provider outages must not destroy the session.
+        throw new ApiError(
+          0,
+          "Reconnecting to your account. Check your connection and try again.",
+        );
+      }
+    }).finally(() => {
+      renewing = undefined;
+    });
+    return renewing;
+  }
+
   return {
     manager,
     signIn: () => manager.signinRedirect(),
@@ -59,15 +117,37 @@ export function createAuth(config: Config) {
           authorization_endpoint: `${config.authDomain}/signup`,
         },
       }).signinRedirect(),
+    restore,
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      const storage = (event: StorageEvent) => {
+        if (
+          event.key === storageKey ||
+          event.key === epochKey ||
+          event.key === null
+        )
+          listener();
+      };
+      const wake = () => {
+        if (document.visibilityState === "visible")
+          void restore().catch(() => {});
+      };
+      window.addEventListener("storage", storage);
+      window.addEventListener("focus", wake);
+      window.addEventListener("online", wake);
+      document.addEventListener("visibilitychange", wake);
+      const timer = setInterval(wake, 60_000);
+      return () => {
+        listeners.delete(listener);
+        window.removeEventListener("storage", storage);
+        window.removeEventListener("focus", wake);
+        window.removeEventListener("online", wake);
+        document.removeEventListener("visibilitychange", wake);
+        clearInterval(timer);
+      };
+    },
     async token() {
-      let user = await manager.getUser();
-      if (user?.expired) {
-        try {
-          user = await manager.signinSilent();
-        } catch {
-          user = null;
-        }
-      }
+      const user = await restore();
       if (!user || user.expired)
         throw new ApiError(
           401,
@@ -76,10 +156,15 @@ export function createAuth(config: Config) {
       return user.access_token;
     },
     async signOut() {
-      const user = await manager.getUser();
-      if (user)
-        sessionStorage.removeItem(`lexikhan:session:${user.profile.sub}`);
-      await manager.removeUser();
+      // Publish intent immediately so an in-flight refresh cannot restore sign-in.
+      localStorage.setItem(epochKey, crypto.randomUUID());
+      await locked(async () => {
+        const user = await manager.getUser();
+        if (user)
+          sessionStorage.removeItem(`lexikhan:session:${user.profile.sub}`);
+        await manager.removeUser();
+      });
+      notify();
       const url = new URL(`${config.authDomain}/logout`);
       url.searchParams.set("client_id", config.clientId);
       url.searchParams.set("logout_uri", `${location.origin}/`);

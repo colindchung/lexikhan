@@ -338,8 +338,6 @@ test("language chats persist and reopen after a reload", async ({ page }) => {
   await expect(page.getByText(/It means good or okay/)).toBeVisible();
   await expect(page.locator(".chat-markdown li")).toHaveCount(2);
   await page.reload();
-  await page.getByRole("button", { name: "Language chat" }).click();
-  await page.getByRole("button", { name: /What does acha mean/ }).click();
   await expect(page.getByText(/It means good or okay/)).toBeVisible();
   expect(
     await page.evaluate(
@@ -350,4 +348,74 @@ test("language chats persist and reopen after a reload", async ({ page }) => {
     path: `test-results/chat-${test.info().project.name}.png`,
     fullPage: true,
   });
+});
+
+test("sign-in survives closing a tab, refreshes once across tabs, and signs out everywhere", async ({
+  page,
+  context,
+}) => {
+  await context.route("**/config.json", (route) =>
+    route.fulfill({ json: config }),
+  );
+  let refreshes = 0;
+  await context.route("https://auth.example.test/oauth2/token", (route) => {
+    refreshes++;
+    expect(route.request().postData()).toContain("grant_type=refresh_token");
+    return route.fulfill({
+      json: {
+        access_token: "renewed-access",
+        token_type: "Bearer",
+        expires_in: 3600,
+      },
+    });
+  });
+  await context.route("https://auth.example.test/logout**", (route) =>
+    route.fulfill({ body: "Signed out" }),
+  );
+  await context.route("https://api.example.test/**", (route) => {
+    expect(route.request().headers().authorization).toBe(
+      "Bearer renewed-access",
+    );
+    return route.fulfill({
+      json: route.request().url().endsWith("/profile")
+        ? { profile: { deckId: "ur-en-v1" }, decks: [] }
+        : { cards: [] },
+    });
+  });
+  await page.goto("/");
+  await page.evaluate(({ authority, clientId }) => {
+    localStorage.setItem(
+      `oidc.user:${authority}:${clientId}`,
+      JSON.stringify({
+        access_token: "expired-access",
+        refresh_token: "test-refresh",
+        token_type: "Bearer",
+        scope: "openid email aws.cognito.signin.user.admin",
+        profile: { sub: "persistent-user" },
+        expires_at: Math.floor(Date.now() / 1000) - 10,
+      }),
+    );
+  }, config);
+  await page.close();
+  const first = await context.newPage();
+  const second = await context.newPage();
+  await Promise.all([first.goto("/"), second.goto("/")]);
+  await expect(
+    first.getByRole("button", { name: "Language chat" }),
+  ).toBeVisible();
+  await expect(
+    second.getByRole("button", { name: "Language chat" }),
+  ).toBeVisible();
+  expect(refreshes).toBe(1);
+  await first.getByRole("button", { name: "Sign out" }).click();
+  await expect(
+    second.getByRole("button", { name: "Create your account" }),
+  ).toBeVisible();
+  expect(
+    await second.evaluate(
+      ({ authority, clientId }) =>
+        localStorage.getItem(`oidc.user:${authority}:${clientId}`),
+      config,
+    ),
+  ).toBeNull();
 });

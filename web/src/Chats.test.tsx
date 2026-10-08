@@ -24,7 +24,10 @@ function setup(available = true) {
   render(<Chats api={api} userId="first" close={vi.fn()} signIn={vi.fn()} />);
   return { api, user: userEvent.setup() };
 }
-beforeEach(() => sessionStorage.clear());
+beforeEach(() => {
+  sessionStorage.clear();
+  localStorage.clear();
+});
 it("opens a saved conversation and keeps the draft when returning", async () => {
   const { user } = setup();
   await user.click(
