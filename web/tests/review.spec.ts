@@ -330,6 +330,7 @@ test("language chats persist and reopen after a reload", async ({ page }) => {
   });
   await page.goto("/");
   await page.getByRole("button", { name: "Language chat" }).click();
+  await expect(page).toHaveURL("/chats");
   await page.getByRole("button", { name: "New chat" }).click();
   await page.getByLabel("Your question").fill("What does acha mean?");
   await page.getByRole("button", { name: "Send question" }).click();
@@ -337,8 +338,23 @@ test("language chats persist and reopen after a reload", async ({ page }) => {
   await expect(page.getByText("Writing…")).toBeVisible();
   await expect(page.getByText(/It means good or okay/)).toBeVisible();
   await expect(page.locator(".chat-markdown li")).toHaveCount(2);
+  const conversationUrl = page.url();
+  expect(new URL(conversationUrl).pathname).toMatch(/^\/chats\/[0-9a-f-]{36}$/);
+  await page.getByLabel("Your question").fill("A follow-up draft");
   await page.reload();
+  await expect(page).toHaveURL(conversationUrl);
   await expect(page.getByText(/It means good or okay/)).toBeVisible();
+  await expect(page.getByLabel("Your question")).toHaveValue(
+    "A follow-up draft",
+  );
+  await page.goBack();
+  await expect(page).toHaveURL("/chats");
+  await expect(page.getByLabel("Your question")).toHaveCount(0);
+  await page.goForward();
+  await expect(page).toHaveURL(conversationUrl);
+  await expect(page.getByLabel("Your question")).toHaveValue(
+    "A follow-up draft",
+  );
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,

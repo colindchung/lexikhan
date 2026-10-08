@@ -330,7 +330,19 @@ loading data, near token expiry, and on focus/reconnection. Temporary renewal
 failures preserve the session; invalid refresh tokens require sign-in again.
 Web Locks serialize refreshes across supported browsers' tabs, and storage events
 synchronize sign-out. Browsers without Web Locks still coalesce within each tab.
-The selected page and conversation are remembered per account. Clearing browser
+The selected page and conversation are addressed by URL. Clearing browser
 storage or using private browsing can prevent persistence. Tokens remain readable
 by same-origin JavaScript; a backend HttpOnly-cookie session would be a separate
 architecture upgrade.
+
+## Application routes
+
+`/practice`, `/reminders`, `/onboarding`, `/chats`, and `/chats/<uuid>` are
+refreshable URLs. `/` opens practice for signed-in users. Conversation IDs are
+the existing stable API IDs; URLs are bookmarkable but remain account-private.
+The URL takes precedence over old last-page preferences. Browser back/forward
+changes pages and selected conversations. Same-tab drafts and review progress
+remain in sessionStorage across refreshes. OAuth state preserves the requested
+route through sign-in; onboarding returns new accounts to their requested route.
+Unknown routes and unavailable conversations have recovery screens. CloudFront
+and the service worker both serve the application shell for deep links.

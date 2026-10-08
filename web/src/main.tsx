@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { App, Brand, Welcome } from "./App";
+import { navigate, returnPath, useRoute } from "./routes";
 import { Chats } from "./Chats";
 import { Reminders } from "./Reminders";
 import { Onboarding } from "./Onboarding";
@@ -45,7 +46,9 @@ async function boot() {
   const auth = createAuth(config);
   if (location.pathname === "/auth/callback") {
     try {
-      await auth.manager.signinRedirectCallback();
+      const signedIn = await auth.manager.signinRedirectCallback();
+      const state = signedIn.state as { returnTo?: unknown } | undefined;
+      history.replaceState({}, "", returnPath(state?.returnTo));
     } catch {
       history.replaceState({}, "", "/");
       root.render(
@@ -55,23 +58,15 @@ async function boot() {
         />,
       );
       return;
-    } finally {
-      history.replaceState({}, "", "/");
     }
   }
   await auth.manager.clearStaleState();
   const initialUser = await auth.restore();
+  if (initialUser && location.pathname === "/") navigate("/practice", true);
   const api = createApi(config.apiUrl, auth.token);
   function Experience() {
     const [user, setUser] = useState(initialUser);
-    const viewKey = `lexikhan:view:${user?.profile.sub ?? "guest"}`;
-    const [view, setView] = useState<"practice" | "reminders" | "chats">(() => {
-      const saved = localStorage.getItem(viewKey);
-      return saved === "chats" || saved === "reminders" ? saved : "practice";
-    });
-    useEffect(() => {
-      localStorage.setItem(viewKey, view);
-    }, [viewKey, view]);
+    const route = useRoute();
     useEffect(
       () =>
         auth.subscribe(() => {
@@ -108,6 +103,13 @@ async function boot() {
       });
     };
     const signIn = () => startAuth("signin");
+    if (route.page === "not-found")
+      return (
+        <AuthStatus
+          error="This page doesn’t exist."
+          retry={() => navigate("/practice")}
+        />
+      );
     return user ? (
       <>
         {error && (
@@ -118,6 +120,22 @@ async function boot() {
         <Onboarding
           api={api}
           userId={user.profile.sub}
+          onProfileReady={(ready) => {
+            if (!ready && location.pathname !== "/onboarding")
+              navigate(
+                `/onboarding?next=${encodeURIComponent(location.pathname + location.search)}`,
+                true,
+              );
+            if (ready && location.pathname === "/onboarding") {
+              const next = returnPath(
+                new URLSearchParams(location.search).get("next"),
+              );
+              navigate(
+                next.startsWith("/onboarding") ? "/practice" : next,
+                true,
+              );
+            }
+          }}
           signIn={signIn}
           signOut={() => {
             void auth
@@ -127,23 +145,26 @@ async function boot() {
               );
           }}
         >
-          {view === "chats" ? (
+          {route.page === "chats" ? (
             <Chats
+              key={route.chatId ?? "chat-list"}
+              selected={route.chatId}
+              onSelect={(id) => navigate(`/chats/${id}`)}
               api={api}
               userId={user.profile.sub}
               signIn={signIn}
-              close={() => setView("practice")}
+              close={() => navigate("/practice")}
             />
-          ) : view === "reminders" ? (
+          ) : route.page === "reminders" ? (
             <Reminders
               api={api}
               signIn={signIn}
-              close={() => setView("practice")}
+              close={() => navigate("/practice")}
             />
           ) : (
             <App
-              openReminders={() => setView("reminders")}
-              openChats={() => setView("chats")}
+              openReminders={() => navigate("/reminders")}
+              openChats={() => navigate("/chats")}
               api={api}
               userId={user.profile.sub}
               signIn={signIn}

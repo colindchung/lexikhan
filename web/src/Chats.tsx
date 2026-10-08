@@ -10,19 +10,19 @@ export function Chats({
   userId,
   close,
   signIn,
+  selected,
+  onSelect,
 }: {
   api: ChatApi;
   userId: string;
   close: () => void;
   signIn: () => void;
+  selected?: string;
+  onSelect: (id: string) => void;
 }) {
   const [list, setList] = useState<ChatSummary[]>([]);
   const [available, setAvailable] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const selectionKey = `lexikhan:chat-selected:${userId}`;
-  const [selected, setSelected] = useState<string | undefined>(
-    () => localStorage.getItem(selectionKey) ?? undefined,
-  );
   const [chat, setChat] = useState<ChatDetail>();
   const [draft, setDraft] = useState(() =>
     selected
@@ -103,11 +103,7 @@ export function Chats({
 
   function select(id: string) {
     follow.current = true;
-    localStorage.setItem(selectionKey, id);
-    setSelected(id);
-    setChat(undefined);
-    setError(undefined);
-    setDraft(sessionStorage.getItem(key(id)) ?? "");
+    onSelect(id);
   }
   async function create() {
     if (lock.current) return;
@@ -215,9 +211,11 @@ export function Chats({
               <p>
                 {error.status === 401
                   ? "Sign in again to continue your conversation."
-                  : error.status === 0
-                    ? "Connection interrupted. Your draft is saved; reload to check for a reply."
-                    : error.message}
+                  : error.status === 404
+                    ? "This conversation doesn’t exist or belongs to another account. Choose a saved chat or start a new one."
+                    : error.status === 0
+                      ? "Connection interrupted. Your draft is saved; reload to check for a reply."
+                      : error.message}
               </p>
               <button
                 onClick={
@@ -247,9 +245,9 @@ export function Chats({
                 Start a new chat to ask your first question.
               </p>
             </div>
-          ) : !chat ? (
+          ) : !chat && !error ? (
             <p role="status">Opening conversation…</p>
-          ) : (
+          ) : chat ? (
             <>
               <div
                 className="chat-messages"
@@ -373,7 +371,7 @@ export function Chats({
                 </div>
               </form>
             </>
-          )}
+          ) : null}
           <p className="quiet chat-privacy">
             Questions are sent to OpenAI. Conversations are saved to your
             account.

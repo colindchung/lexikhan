@@ -107,7 +107,10 @@ export function createAuth(config: Config) {
 
   return {
     manager,
-    signIn: () => manager.signinRedirect(),
+    signIn: () =>
+      manager.signinRedirect({
+        state: { returnTo: location.pathname + location.search },
+      }),
     signUp: () =>
       new UserManager({
         ...settings,
@@ -116,7 +119,9 @@ export function createAuth(config: Config) {
           ...settings.metadata,
           authorization_endpoint: `${config.authDomain}/signup`,
         },
-      }).signinRedirect(),
+      }).signinRedirect({
+        state: { returnTo: location.pathname + location.search },
+      }),
     restore,
     subscribe(listener: () => void) {
       listeners.add(listener);

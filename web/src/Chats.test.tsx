@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
@@ -21,7 +22,21 @@ function setup(available = true) {
     chat: vi.fn().mockResolvedValue(initial),
     sendMessage: vi.fn(),
   } satisfies ChatApi;
-  render(<Chats api={api} userId="first" close={vi.fn()} signIn={vi.fn()} />);
+  function Harness() {
+    const [selected, onSelect] = useState<string>();
+    return (
+      <Chats
+        key={selected}
+        selected={selected}
+        onSelect={onSelect}
+        api={api}
+        userId="first"
+        close={vi.fn()}
+        signIn={vi.fn()}
+      />
+    );
+  }
+  render(<Harness />);
   return { api, user: userEvent.setup() };
 }
 beforeEach(() => {

@@ -20,12 +20,14 @@ export function Onboarding({
   signIn,
   signOut,
   children,
+  onProfileReady,
 }: {
   api: OnboardingApi;
   userId: string;
   signIn: () => void;
   signOut: () => void;
   children: ReactNode;
+  onProfileReady?: (ready: boolean) => void;
 }) {
   const [data, setData] = useState<ProfileResponse>();
   const [error, setError] = useState<ApiError>();
@@ -73,7 +75,8 @@ export function Onboarding({
   }, [api]);
   useEffect(() => {
     if (data && !data.profile) heading.current?.focus();
-  }, [data]);
+    if (data) onProfileReady?.(!!data.profile);
+  }, [data, onProfileReady]);
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!deck || lock.current) return;
