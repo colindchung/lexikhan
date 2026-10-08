@@ -130,7 +130,7 @@ def email_content(entry, web_url):
         f"under Reminders: {web_url}/"
     )
     text = (
-        f"lexikhan — A little, every day\n\nYour daily {language}\n\n"
+        f"Lexikhan\n\nYour daily {language}\n\n"
         f"{entry['text']}\n"
         + (f"Romanized pronunciation: {pronunciation}\n" if pronunciation else "")
         + f"Meaning: {entry['meaning']}\n\n{footer}"
@@ -159,7 +159,7 @@ def email_content(entry, web_url):
 </head>
 <body style="margin:0;padding:0;background-color:#f5f3ed;color:#273c34">
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all">
-    {escape(pronunciation)} — {escape(entry["meaning"])}. A little, every day.
+    {escape(pronunciation)}: {escape(entry["meaning"])}.
   </div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
     bgcolor="#f5f3ed" style="background-color:#f5f3ed">
@@ -181,8 +181,6 @@ def email_content(entry, web_url):
               </td>
             </tr>
           </table>
-          <p style="margin:16px 0 0;color:#647268;font:11px/1.5 Arial,sans-serif;
-            letter-spacing:2px">A LITTLE, EVERY DAY</p>
         </td></tr>
         <tr><td bgcolor="#fffdf7" style="background-color:#fffdf7;
           border:1px solid #d9ddd2;border-radius:16px">
@@ -212,7 +210,6 @@ def email_content(entry, web_url):
         </td></tr>
         <tr><td style="padding:24px 4px 0;color:#647268;
           font:14px/1.7 Arial,sans-serif">
-          <p style="margin:0">One small addition to your everyday vocabulary.</p>
           <p style="margin:12px 0 0">
             <a href="{url}" style="color:#224c3f;text-decoration:underline">
               Manage your emails</a><br>

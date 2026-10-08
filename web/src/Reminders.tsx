@@ -78,15 +78,12 @@ export function Reminders({
         </button>
       </header>
       <main className="onboarding" aria-busy={busy}>
-        <div className="eyebrow">A LITTLE EVERY DAY</div>
+        <div className="eyebrow">EMAIL</div>
         <h1 ref={heading} tabIndex={-1}>
-          Make time
-          <br />
-          <em>to remember.</em>
+          Daily vocabulary
         </h1>
         <p className="lede">
-          One random everyday word or casual phrase, with its meaning, delivered
-          in your daily email. No repeats.
+          One new word or phrase by email each day. No repeats.
         </p>
         {error && (
           <div className="notice" role="alert">

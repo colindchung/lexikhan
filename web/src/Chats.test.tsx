@@ -71,7 +71,7 @@ it("sends once and renders Markdown without executable HTML or links", async () 
         messageId: "turn",
         text: "acha",
         answer:
-          "**اچھا** — acha — good\n\n- A casual greeting\n\n[Unsafe](javascript:alert(1))<script>no</script>",
+          "**اچھا**: acha: good\n\n- A casual greeting\n\n[Unsafe](javascript:alert(1))<script>no</script>",
         status: "COMPLETE",
         errorMessage: "",
         createdAt: initial.createdAt,

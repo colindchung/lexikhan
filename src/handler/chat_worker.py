@@ -43,6 +43,8 @@ def generate(messages, language, key, on_text=None):
         "pronunciation and English meaning. Give a natural usage example. "
         "Distinguish literal/idiomatic meanings and informal/polite wording. "
         "Ask for context if ambiguous. Be concise and candid about uncertainty. "
+        "Answer directly without greetings, praise, motivational filler, "
+        "summaries, or offers to help further. Do not use em dashes. "
         "Use concise Markdown: short paragraphs, bold key terms, "
         "and lists when useful. "
         "Avoid large headings, tables unless requested, and HTML. "
@@ -83,7 +85,7 @@ def generate(messages, language, key, on_text=None):
                 event = json.loads(data)
                 kind = event.get("type")
                 if kind in {"response.output_text.delta", "response.refusal.delta"}:
-                    text += event.get("delta", "")
+                    text += event.get("delta", "").replace("\u2014", ",")
                     if len(text) > 10000:
                         raise ValueError("Stream exceeded length limit")
                     if on_text:

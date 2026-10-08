@@ -20,7 +20,7 @@ test("welcome begins authorization-code sign-in with PKCE", async ({
     }),
   );
   await page.goto("/");
-  await page.getByRole("button", { name: /Sign in to your space/ }).click();
+  await page.getByRole("button", { name: /Sign in/ }).click();
   await expect(page).toHaveURL(/oauth2\/authorize/);
   const url = new URL(page.url());
   expect(url.searchParams.get("response_type")).toBe("code");
@@ -137,9 +137,7 @@ test("review flow is keyboard accessible, retries safely, and fits the screen", 
   });
   await page.getByRole("button", { name: /Good Got it/ }).click();
   await page.getByRole("button", { name: "Retry saved review" }).click();
-  await expect(
-    page.getByText("Your progress is saved. Let it settle in."),
-  ).toBeVisible();
+  await expect(page.getByText("Progress saved.")).toBeVisible();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -211,7 +209,7 @@ test("new learner enrolls in Urdu and sees right-to-left answers", async ({
       json: {
         cardId: card.cardId,
         answer: "السلام علیکم",
-        explanation: "Assalaam alaikum — a common respectful greeting.",
+        explanation: "Assalaam alaikum: a common respectful greeting.",
         examples: [],
       },
     });
@@ -315,7 +313,7 @@ test("language chats persist and reopen after a reload", async ({ page }) => {
       chat.turns[0] = {
         ...chat.turns[0],
         status: "GENERATING",
-        answer: "**اچھا** — acha",
+        answer: "**اچھا**: acha",
       };
     } else if (chat?.pending) {
       chat.pending = false;
@@ -323,7 +321,7 @@ test("language chats persist and reopen after a reload", async ({ page }) => {
         ...chat.turns[0],
         status: "COMPLETE",
         answer:
-          "**اچھا** — acha\n\nIt means good or okay. You can also use it to acknowledge what someone said.\n\n- **Acha, theek hai** — Okay, that’s fine.\n- **Acha?** — Really? (with a questioning tone)",
+          "**اچھا**: acha\n\nIt means good or okay. You can also use it to acknowledge what someone said.\n\n- **Acha, theek hai**: Okay, that’s fine.\n- **Acha?**: Really? (with a questioning tone)",
       };
     }
     return route.fulfill({ json: chat ?? { cards: [] } });

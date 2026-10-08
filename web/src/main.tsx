@@ -21,10 +21,9 @@ function AuthStatus({ error, retry }: { error?: string; retry?: () => void }) {
         <Brand />
       </header>
       <main className="onboarding">
-        <div className="eyebrow">A LITTLE, EVERY DAY</div>
-        <h1>{error ? "Let’s try that again." : "Opening your space…"}</h1>
+        <h1>{error ? "Unable to load" : "Loading…"}</h1>
         <p role={error ? "alert" : "status"} className="lede">
-          {error ?? "Just a moment while we get you settled in."}
+          {error ?? "Loading your account."}
         </p>
         {retry && (
           <button className="primary" onClick={retry}>
@@ -197,7 +196,7 @@ async function boot() {
 void boot().catch(() =>
   root.render(
     <AuthStatus
-      error="We couldn’t open your space. Check your connection, then try again."
+      error="Unable to load the app. Check your connection, then try again."
       retry={() => location.reload()}
     />,
   ),

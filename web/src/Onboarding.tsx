@@ -111,13 +111,11 @@ export function Onboarding({
         </button>
       </header>
       <main className="onboarding" aria-busy={busy}>
-        <div className="eyebrow">YOUR FIRST SMALL STEP</div>
+        <div className="eyebrow">SETUP</div>
         <h1 ref={heading} tabIndex={-1}>
-          Make this
-          <br />
-          <em>your practice.</em>
+          Set up your practice
         </h1>
-        <p className="lede">A few useful phrases. A pace that feels right.</p>
+        <p className="lede">Choose a language and daily goal.</p>
         {error && (
           <div className="notice" role="alert">
             <p>
@@ -138,7 +136,7 @@ export function Onboarding({
         )}
         {!data ? (
           <p role="status">
-            {busy ? "Loading your space…" : "Your setup will appear here."}
+            {busy ? "Loading settings…" : "Your setup will appear here."}
           </p>
         ) : (
           <form onSubmit={(event) => void submit(event)}>
@@ -154,7 +152,7 @@ export function Onboarding({
                 {data.decks.map((d) => (
                   <option key={d.id} value={d.id}>
                     {languageName(d.learningLanguage)} from{" "}
-                    {languageName(d.baseLanguage)} — {d.name}
+                    {languageName(d.baseLanguage)}: {d.name}
                   </option>
                 ))}
               </select>
@@ -170,9 +168,9 @@ export function Onboarding({
                 value={dailyGoal}
                 onChange={(e) => setDailyGoal(Number(e.target.value))}
               >
-                <option value={3}>3 cards · a gentle start</option>
-                <option value={5}>5 cards · a little momentum</option>
-                <option value={10}>10 cards · room to grow</option>
+                <option value={3}>3 cards</option>
+                <option value={5}>5 cards</option>
+                <option value={10}>10 cards</option>
               </select>
               <p className="quiet">
                 Each session fits your goal. You can always practice more.

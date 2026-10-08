@@ -204,7 +204,7 @@ export function Chats({
           <h1>
             {chat?.title && chat.turnCount > 0
               ? chat.title
-              : "Let’s talk language."}
+              : "New conversation"}
           </h1>
           {error && (
             <div role="alert" className="notice">
@@ -234,16 +234,12 @@ export function Chats({
           {!selected ? (
             <div className="chat-empty">
               <p className="lede">
-                A word you heard. A phrase you’re unsure about.
-                <br />
-                Ask for meanings, pronunciation, and everyday examples.
+                Ask about meanings, pronunciation, or usage.
               </p>
               <div className="chat-example">
                 “What does acha mean, and when would I say it?”
               </div>
-              <p className="quiet">
-                Start a new chat to ask your first question.
-              </p>
+              <p className="quiet">Select a chat or start a new one.</p>
             </div>
           ) : !chat && !error ? (
             <p role="status">Opening conversation…</p>
@@ -287,7 +283,7 @@ export function Chats({
                               p: ({ children }) => <p dir="auto">{children}</p>,
                             }}
                           >
-                            {turn.answer}
+                            {turn.answer.replace(/\s*\u2014\s*/g, ", ")}
                           </ReactMarkdown>
                         </div>
                       </article>

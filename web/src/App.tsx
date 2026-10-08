@@ -46,9 +46,8 @@ function restore(key: string): Progress | null {
   }
 }
 export function nextDate(value?: string | null) {
-  if (!value) return "Check back when you’re ready.";
-  if (new Date(value).getTime() <= Date.now())
-    return "More practice is ready whenever you are.";
+  if (!value) return "No reviews scheduled.";
+  if (new Date(value).getTime() <= Date.now()) return "More cards are ready.";
   return `Next review ${new Intl.DateTimeFormat(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" }).format(new Date(value))}.`;
 }
 export function Brand() {
@@ -57,7 +56,7 @@ export function Brand() {
       <span className="brand-mark" aria-hidden="true">
         L<span>•</span>
       </span>
-      lexikhan<span className="brand-tag">A LITTLE, EVERY DAY</span>
+      lexikhan
     </a>
   );
 }
@@ -76,21 +75,13 @@ export function Welcome({
     <div className="app">
       <header>
         <Brand />
-        <span className="header-note">Your personal practice space</span>
       </header>
       <main className="welcome">
-        <div className="eyebrow">
-          <span className="status-dot" /> SMALL STEPS. LASTING MEMORY.
-        </div>
-        <h1>
-          Make room for
-          <br />
-          <em>a little language.</em>
-        </h1>
+        <div className="eyebrow">LANGUAGE PRACTICE</div>
+        <h1>Learn everyday language.</h1>
         <p className="lede">
-          A few words. A moment to remember.
-          <br />
-          Build a practice that fits into your day.
+          Practice vocabulary, get daily words by email, and ask language
+          questions.
         </p>
         {error && (
           <p role="alert" className="notice">
@@ -108,30 +99,14 @@ export function Welcome({
             onClick={signIn}
             disabled={!!pending}
           >
-            {pending === "signin"
-              ? "Opening sign-in…"
-              : "Sign in to your space"}
+            {pending === "signin" ? "Opening sign-in…" : "Sign in"}
           </button>
         </div>
         <p className="quiet">
           New here? Use your email to create an account. We’ll send a
           verification code.
         </p>
-        <div className="welcome-card" aria-hidden="true">
-          <span className="eyebrow">THE ART OF REMEMBERING</span>
-          <p>
-            Small today.
-            <br />
-            <em>Second nature tomorrow.</em>
-          </p>
-          <div className="card-rule" />
-          <span>RECALL &nbsp; · &nbsp; REFLECT &nbsp; · &nbsp; REPEAT</span>
-        </div>
       </main>
-      <footer>
-        Consistency, without the pressure.
-        <span>LEXIKHAN / PERSONAL LEARNING</span>
-      </footer>
     </div>
   );
 }
@@ -299,10 +274,10 @@ export function App({
         {!loaded ? (
           <section className="home">
             <h1 ref={heading} tabIndex={-1}>
-              A moment to settle in.
+              Loading practice
             </h1>
             <p role="status">
-              {busy ? "Finding your cards…" : "Your practice will appear here."}
+              {busy ? "Loading cards…" : "Your practice will appear here."}
             </p>
           </section>
         ) : progress.screen === "home" ? (
@@ -312,23 +287,15 @@ export function App({
             </div>
             <h1 ref={heading} tabIndex={-1}>
               {progress.cards.length ? (
-                <>
-                  A little practice.
-                  <br />
-                  <em>A lasting memory.</em>
-                </>
+                <>Practice vocabulary</>
               ) : (
-                <>
-                  Room to breathe.
-                  <br />
-                  <em>You’re all caught up.</em>
-                </>
+                <>No cards due</>
               )}
             </h1>
             <p className="lede">
               {progress.cards.length
-                ? "Pick up where your memory left off."
-                : "Nothing is due right now. Your next review will be here when it’s time."}
+                ? "Review your cards."
+                : "Your next review time is shown below."}
             </p>
             <div className="session-summary">
               <div>
@@ -365,9 +332,7 @@ export function App({
               </button>
             )}
             <p className="quiet">
-              {progress.cards.length
-                ? "No rush. Just a few thoughtful minutes."
-                : nextDate(progress.nextReviewAt)}
+              {progress.cards.length ? "" : nextDate(progress.nextReviewAt)}
             </p>
             {progress.retainedAnswer && (
               <aside className="saved-answer">
@@ -375,27 +340,16 @@ export function App({
                 <p>{progress.retainedAnswer}</p>
               </aside>
             )}
-            <div className="practice-note">
-              <span aria-hidden="true">✳</span>
-              <p>
-                Remembering takes practice.
-                <br />
-                <span>We’ll bring each card back when it helps most.</span>
-              </p>
-            </div>
           </section>
         ) : progress.screen === "complete" ? (
           <section className="complete">
             <div className="completion-mark" aria-hidden="true">
               ✓
             </div>
-            <div className="eyebrow">A LITTLE FURTHER THAN BEFORE</div>
             <h1 ref={heading} tabIndex={-1}>
-              That’s time
-              <br />
-              <em>well remembered.</em>
+              Session complete
             </h1>
-            <p className="lede">Your progress is saved. Let it settle in.</p>
+            <p className="lede">Progress saved.</p>
             <div className="session-summary">
               <div>
                 <strong>{progress.reviewed}</strong>
@@ -416,7 +370,7 @@ export function App({
               onClick={() => void refresh()}
               disabled={busy}
             >
-              Back to your space <span aria-hidden="true">→</span>
+              Back to practice <span aria-hidden="true">→</span>
             </button>
           </section>
         ) : (
@@ -424,9 +378,7 @@ export function App({
             <section className="review">
               <div className="review-top">
                 <span className="eyebrow">
-                  {card.state === "NEW"
-                    ? "A NEW DISCOVERY"
-                    : "A FAMILIAR THOUGHT"}
+                  {card.state === "NEW" ? "NEW CARD" : "REVIEW"}
                 </span>
                 <span className="counter">
                   {progress.index + 1} <span>/ {progress.cards.length}</span>
@@ -467,7 +419,9 @@ export function App({
                     <span className="eyebrow">THE ANSWER</span>
                     <h2 dir="auto">{progress.answer?.answer}</h2>
                     {progress.answer?.explanation && (
-                      <p>{progress.answer.explanation}</p>
+                      <p>
+                        {progress.answer.explanation.replaceAll("\u2014", ":")}
+                      </p>
                     )}
                     {progress.answer?.examples.map((example, i) => (
                       <p className="example" key={i}>
@@ -529,7 +483,7 @@ export function App({
                     </div>
                   )}
                   <p className="quiet">
-                    An honest answer helps us find the right time to ask again.
+                    Your rating sets the next review date.
                   </p>
                 </div>
               )}
@@ -537,10 +491,6 @@ export function App({
           )
         )}
       </main>
-      <footer>
-        A little, every day.
-        <span>RECALL &nbsp; / &nbsp; REFLECT &nbsp; / &nbsp; REPEAT</span>
-      </footer>
     </div>
   );
 }

@@ -47,7 +47,7 @@ describe("daily practice", () => {
     const { user, api } = setup();
     await reveal(user);
     await user.click(screen.getByRole("button", { name: /Good Got it/ }));
-    await screen.findByText(/Your progress is saved/);
+    await screen.findByText(/Progress saved/);
     expect(api.review).toHaveBeenCalledWith(
       expect.objectContaining({
         cardId: "one",
@@ -74,7 +74,7 @@ describe("daily practice", () => {
     await second.user.click(
       screen.getByRole("button", { name: "Retry saved review" }),
     );
-    await screen.findByText(/Your progress is saved/);
+    await screen.findByText(/Progress saved/);
     expect(review.mock.calls[1][0]).toEqual(submitted);
   });
   it("refreshes a stale version without losing the learner answer", async () => {
@@ -128,7 +128,7 @@ describe("daily practice", () => {
       .mockResolvedValue({ cards: [] });
     const { user } = setup({ session });
     await user.click(await screen.findByRole("button", { name: "Try again" }));
-    await screen.findByText(/all caught up/);
+    await screen.findByText(/No cards due/);
     expect(
       screen.queryByRole("button", { name: /Start session/ }),
     ).not.toBeInTheDocument();
@@ -146,15 +146,13 @@ describe("daily practice", () => {
     expect(review).toHaveBeenCalledOnce();
     resolve(result);
     await waitFor(() =>
-      expect(screen.getByText(/Your progress is saved/)).toBeVisible(),
+      expect(screen.getByText(/Progress saved/)).toBeVisible(),
     );
   });
   it("starts hosted sign-in from the welcome screen", async () => {
     const signIn = vi.fn();
     render(<Welcome signIn={signIn} />);
-    await userEvent.click(
-      screen.getByRole("button", { name: /Sign in to your space/ }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: /Sign in/ }));
     expect(signIn).toHaveBeenCalledOnce();
   });
 });

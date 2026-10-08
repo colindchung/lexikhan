@@ -60,7 +60,7 @@ def test_account_isolation_and_private_access(repository):
 def test_reply_is_durable_and_followup_has_context(repository):
     chat_id = setup(repository)
     request, payload = submit(repository, chat_id)
-    responder = Mock(return_value="اچھا — acha — good; also okay.")
+    responder = Mock(return_value="اچھا: acha: good; also okay.")
     assert (
         process(repository, payload, NOW, responder, lambda: "key")["status"]
         == "complete"

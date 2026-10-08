@@ -18,16 +18,16 @@ DECKS = {
             (
                 "Hello (a respectful greeting)",
                 "السلام علیکم",
-                "Assalaam alaikum — a common respectful greeting.",
+                "Assalaam alaikum: a common respectful greeting.",
             ),
             ("Thank you", "شکریہ", "Shukriya."),
-            ("Please", "براہ کرم", "Baraah-e-karam — a polite, formal request."),
-            ("Yes", "جی ہاں", "Ji haan — a polite yes."),
+            ("Please", "براہ کرم", "Baraah-e-karam: a polite, formal request."),
+            ("Yes", "جی ہاں", "Ji haan: a polite yes."),
             ("No", "نہیں", "Nahin."),
             (
                 "How are you? (polite)",
                 "آپ کیسے ہیں؟",
-                "Aap kaise hain? — polite address; for a woman, "
+                "Aap kaise hain?: polite address; for a woman, "
                 "آپ کیسی ہیں؟ (aap kaisi hain?).",
             ),
             ("I'm fine", "میں ٹھیک ہوں", "Main theek hoon."),
@@ -39,13 +39,13 @@ DECKS = {
             (
                 "Please forgive me / excuse me",
                 "معاف کیجیے",
-                "Maaf kijiye — a polite apology or request to excuse you.",
+                "Maaf kijiye: a polite apology or request to excuse you.",
             ),
             ("I need water", "مجھے پانی چاہیے", "Mujhe paani chahiye."),
             (
                 "How much does this cost?",
                 "یہ کتنے کا ہے؟",
-                "Yeh kitne ka hai? — for an item with masculine grammatical gender.",
+                "Yeh kitne ka hai?: for an item with masculine grammatical gender.",
             ),
             ("Goodbye", "خدا حافظ", "Khuda haafiz."),
         ],

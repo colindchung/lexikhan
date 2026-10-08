@@ -12,7 +12,7 @@ try {
   let page = await context.newPage();
   page.setDefaultTimeout(30000);
   await page.goto(`${url}/reminders`);
-  await page.getByRole("button", { name: /Sign in to your space/ }).click();
+  await page.getByRole("button", { name: /Sign in/ }).click();
   await page.locator('input[name="username"]:visible').fill(username);
   await page.locator('input[name="password"]:visible').fill(password);
   await page.locator('input[name="signInSubmitButton"]:visible').click();
@@ -42,9 +42,9 @@ try {
     await page.getByRole("heading", { name: answer, exact: true }).waitFor();
     await page.getByRole("button", { name: /Easy Knew it/ }).click();
   }
-  await page.getByText("Your progress is saved. Let it settle in.").waitFor();
+  await page.getByText("Progress saved.").waitFor();
   await page.reload();
-  await page.getByText("Your progress is saved. Let it settle in.").waitFor();
+  await page.getByText("Progress saved.").waitFor();
   await page.getByRole("button", { name: "Reminders", exact: true }).click();
   await page.getByText(/Email setup is pending/).waitFor();
   if (!(await page.getByRole("checkbox").isDisabled()))
@@ -68,7 +68,7 @@ try {
   await page.goto(url);
   await page.getByRole("button", { name: "Reminders", exact: true }).waitFor();
   await page.getByRole("button", { name: /Sign out/ }).click();
-  await page.getByRole("button", { name: /Sign in to your space/ }).waitFor();
+  await page.getByRole("button", { name: /Sign in/ }).waitFor();
   console.log(
     "PASS: CloudFront → hosted Cognito PKCE sign-in → Urdu onboarding → Lambda review → completion → reload → close/reopen → token renewal → sign-out",
   );

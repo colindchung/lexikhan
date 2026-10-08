@@ -210,7 +210,6 @@ class ApplicationStack(Stack):
                     '<div style="background:#f5f3ed;padding:32px;color:#273c34;'
                     'font-family:Arial,sans-serif">'
                     '<h1 style="color:#224c3f">lexikhan</h1>'
-                    "<p>A little, every day.</p>"
                     "<h2>Verify your email</h2>"
                     "<p>Enter this code to continue to your Lexikhan account:</p>"
                     '<p style="font-size:32px;letter-spacing:4px">{####}</p>'
