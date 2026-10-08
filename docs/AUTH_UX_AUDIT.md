@@ -14,6 +14,7 @@ Cognito's supported classic UI customization API; credentials remain on Cognito.
 | Generic error after an invalid callback | Clear recovery screen; callback parameters removed | Gives the user a way back without retaining expired URL parameters |
 | Configuration errors mixed with sign-in | Retry reloads configuration; 15-second request timeout | A connection failure no longer leaves an indefinite blank screen |
 | Generic verification-code email | Lexikhan subject, name, colors, and clear code instructions | Connects email verification to the account being created |
+| Offline cache waited for an update prompt that did not exist | New service worker activates without reloading the current review | A normal refresh can load a deployed release |
 | Browser Back could retain disabled actions | Reset pending state on pageshow | Allows another attempt after returning from authentication |
 
 ## Verification

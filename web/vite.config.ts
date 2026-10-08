@@ -10,6 +10,10 @@ export default defineConfig({
       injectRegister: null,
       manifest: false,
       workbox: {
+        // Registration is manual; there is no update-prompt UI. Activate the new
+        // shell for the next navigation without reloading an in-progress review.
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ["**/*.{js,css,html,svg,png,webmanifest,woff2}"],
         navigateFallback: "index.html",
         navigateFallbackDenylist: [/^\/auth\//],
